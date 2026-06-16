@@ -122,6 +122,32 @@ proxy.log:      GET  .../auth/session → 200 | Cookie(req): 无   ← 浏览器
 | `logNav(from, to)` | 记录路由导航轨迹 |
 | `logError(line)` | 记录任意自定义错误行 |
 
+## 已知局限 & Roadmap
+
+v0.1.0 可用但坦诚不完美。以下是当前版本的真实痛点，按优先级排——不是客套的 TODO，是会让你踩坑的具体问题：
+
+### 🔴 敏感字段会落进日志
+`logApiCall` 全量记录 request/response，`password` / `token` / `secret` / `authorization` 等字段会**明文写进 `api-calls.log`**。
+**计划**：默认脱敏（字段名命中黑名单 → 打码），`{ raw: true }` 显式放行。
+
+### 🟠 高频上报有性能退化
+`writeNewest` 每条日志都全量读 + 写整个文件，长 session 下单次写入 O(n)、累计 O(n²)；中间件又是**同步写盘**，会阻塞 dev server。
+**计划**：append-only + ring buffer，或内存 buffer 节流批写。
+
+### 🟠 API 调用要手动埋点
+`logApiCall()` 得在你每个 fetch / axios 拦截器里逐个调用，漏一处就是盲区。
+**计划**：提供 `autoInstrument` 选项，自动包装 `window.fetch` / `XMLHttpRequest`，让手动埋点从「必做」降级为「可选」。
+
+### 🟡 errors.log 没有聚合去重
+同一错误刷 50 次就是 50 行，agent 要自己数频率判断严重度。
+**计划**：相同签名折叠 + 计数，文件头部直接给 top errors。
+
+### 🟡 路由导航要手动上报
+`logNav()` 没有自动监听 `history.pushState` / `popstate`，react-router / vue-router 接入靠手动。
+**计划**：自动监听 history API。
+
+> 欢迎在 [Issues](https://github.com/webkubor/vite-plugin-agent-eyes/issues) 反馈，或直接 PR。
+
 ## License
 
 [MIT](./LICENSE)
