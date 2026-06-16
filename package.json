@@ -4,6 +4,10 @@
   "description": "给 AI agent 的自愈遥测层：结构化运行时日志（API/错误/代理 header）+ 本地 cookie 修复，让 agent 自我诊断、自我修复。Agent-readable runtime telemetry for Vite dev.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/webkubor/vite-plugin-agent-eyes.git"
+  },
   "keywords": ["vite", "vite-plugin", "ai-agent", "debugging", "telemetry", "self-healing", "proxy", "cookie"],
   "exports": {
     ".": {
