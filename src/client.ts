@@ -1,7 +1,9 @@
 /**
  * vite-plugin-agent-eyes / 客户端上报。
  * 把 API 调用与前端运行时错误 POST 到 dev 端点（默认 /dev/log），由服务端插件落盘成 agent 可读遥测。
- * 仅 dev 生效；接入方在自己的 HTTP 层（fetch/ky/axios 拦截器）和入口调用即可。
+ * 仅 dev 生效。两种接入方式：
+ *  - 手动埋点：logApiCall / logNav / logError + installAgentErrorReporter
+ *  - 一键自动：autoInstrument()（自动包装 fetch/XHR/导航/全局错误）
  */
 
 const DEFAULT_ENDPOINT = '/dev/log'
@@ -24,6 +26,20 @@ function post(endpoint: string, payload: unknown) {
   }
 }
 
+/* ---- 敏感字段脱敏 ---- */
+const SENSITIVE_KEYS =
+  /(?:^|[._-])(pass(?:word|wd)?|pwd|secret|token|access_?token|refresh_?token|api_?key|apikey|authorization|cookie|set-?cookie)(?:$|[._-])/i
+
+function redact(v: unknown, raw: boolean, seen: WeakSet<object> = new WeakSet(), depth = 0): unknown {
+  if (raw || v == null || typeof v !== 'object' || depth > 8) return v
+  if (seen.has(v as object)) return '[Circular]'
+  seen.add(v as object)
+  if (Array.isArray(v)) return v.map((x) => redact(x, false, seen, depth + 1))
+  const out: Record<string, unknown> = {}
+  for (const [k, val] of Object.entries(v)) out[k] = SENSITIVE_KEYS.test(k) ? '***' : redact(val, false, seen, depth + 1)
+  return out
+}
+
 export interface ApiLogEntry {
   method: string
   path: string
@@ -37,12 +53,29 @@ export interface ApiLogEntry {
   page_path?: string
   request?: unknown
   response?: unknown
+  /** 跳过敏感字段脱敏（默认会脱敏），仅在确认无敏感数据时开启 */
+  raw?: boolean
 }
 
 /** 在 HTTP 拦截器里调用，记录一次 API 调用（成功或失败都记）。 */
 export function logApiCall(entry: ApiLogEntry, endpoint: string = DEFAULT_ENDPOINT) {
   if (!isDev()) return
-  post(endpoint, { kind: 'api', ...entry })
+  const raw = entry.raw
+  post(endpoint, {
+    kind: 'api',
+    method: entry.method,
+    path: entry.path,
+    url: entry.url,
+    ok: entry.ok,
+    duration_ms: entry.duration_ms,
+    code: entry.code,
+    status: entry.status,
+    request_id: entry.request_id,
+    error: entry.error,
+    page_path: entry.page_path,
+    request: redact(entry.request, !!raw),
+    response: redact(entry.response, !!raw),
+  })
 }
 
 /** 路由变化时调用，记录导航轨迹（帮 agent 还原"在哪个页面发生的"）。 */
@@ -61,8 +94,10 @@ export function logError(line: string, endpoint: string = DEFAULT_ENDPOINT) {
  * 一次性挂上全局错误捕获：window error / unhandledrejection / console.error。
  * 在应用入口（main.tsx）调用一次。返回卸载函数。
  */
+let errReporterInstalled = false
 export function installAgentErrorReporter(endpoint: string = DEFAULT_ENDPOINT): () => void {
-  if (!isDev() || typeof window === 'undefined') return () => {}
+  if (!isDev() || typeof window === 'undefined' || errReporterInstalled) return () => {}
+  errReporterInstalled = true
 
   const onError = (e: ErrorEvent) =>
     logError(`[frontend][uncaught] ${e.message} @ ${e.filename}:${e.lineno}:${e.colno}`, endpoint)
@@ -82,5 +117,225 @@ export function installAgentErrorReporter(endpoint: string = DEFAULT_ENDPOINT): 
     window.removeEventListener('error', onError)
     window.removeEventListener('unhandledrejection', onRejection)
     console.error = originalConsoleError
+    errReporterInstalled = false
   }
+}
+
+/* ---- 自动埋点 ---- */
+export interface AutoInstrumentOptions {
+  endpoint?: string
+  /** 记录请求/响应体（默认 true） */
+  logBody?: boolean
+  /** 跳过敏感字段脱敏（默认 false，即默认脱敏） */
+  raw?: boolean
+  /** 自动捕获路由导航（默认 true） */
+  nav?: boolean
+  /** 自动捕获全局错误（默认 true） */
+  errors?: boolean
+}
+
+function safePath(url: string): string {
+  try {
+    return new URL(url, typeof location !== 'undefined' ? location.origin : 'http://localhost').pathname
+  } catch {
+    return url
+  }
+}
+
+function tryJson(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
+  }
+}
+
+function isReportUrl(url: string, endpoint: string): boolean {
+  try {
+    return (
+      new URL(url, typeof location !== 'undefined' ? location.origin : 'http://localhost').pathname === endpoint
+    )
+  } catch {
+    return url === endpoint
+  }
+}
+
+function patchFetch(endpoint: string, logBody: boolean, raw: boolean): () => void {
+  if (typeof window === 'undefined' || typeof window.fetch !== 'function') return () => {}
+  const original = window.fetch
+  window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    // 上报请求直接走 original——避免「post → fetch → patchFetch 捕获 → logApiCall → post」递归 + 自我引用噪声
+    if (isReportUrl(url, endpoint)) return original(input, init)
+    // 兼容 fetch(new Request(url, { method, body }))：method/body 可能在 Request 而非 init 上
+    const reqInit = init ?? (input instanceof Request ? { method: input.method } : undefined)
+    const method = String(reqInit?.method ?? 'GET').toUpperCase()
+    const started = performance.now()
+    const page_path = location.pathname
+    const path = safePath(url)
+    let reqBody: unknown
+    if (logBody && init?.body != null && typeof init.body === 'string') {
+      reqBody = tryJson(init.body)
+    }
+    try {
+      const res = await original(input, init)
+      const duration_ms = Math.round(performance.now() - started)
+      let resBody: unknown
+      if (logBody) {
+        // 大响应/非文本不读 body，避免 clone().text() 内存翻倍
+        const ct = res.headers.get('content-type') ?? ''
+        const cl = Number(res.headers.get('content-length') ?? 0)
+        const readable = /json|text|javascript|xml|form/i.test(ct) && (!cl || cl < 64 * 1024)
+        if (readable) {
+          try {
+            const clone = res.clone()
+            const text = await clone.text()
+            resBody = text ? tryJson(text) : ''
+          } catch {
+            /* 忽略读取失败 */
+          }
+        } else {
+          resBody = cl ? `[${cl} bytes, ${ct || 'binary'}]` : '[non-text or large]'
+        }
+      }
+      logApiCall({ method, path, url, ok: res.ok, duration_ms, status: res.status, request: reqBody, response: resBody, page_path, raw }, endpoint)
+      return res
+    } catch (e) {
+      const duration_ms = Math.round(performance.now() - started)
+      logApiCall({ method, path, url, ok: false, duration_ms, error: String(e), page_path, raw }, endpoint)
+      throw e
+    }
+  }) as typeof window.fetch
+  return () => {
+    window.fetch = original
+  }
+}
+
+function patchXHR(endpoint: string, logBody: boolean, raw: boolean): () => void {
+  if (typeof window === 'undefined' || typeof XMLHttpRequest === 'undefined') return () => {}
+  const originalOpen = XMLHttpRequest.prototype.open
+  const originalSend = XMLHttpRequest.prototype.send
+
+  XMLHttpRequest.prototype.open = function (this: XMLHttpRequest, method: string, url: string, ...rest: unknown[]) {
+    const self = this as unknown as {
+      __ae?: { method: string; url: string; path: string; started: number; page_path: string }
+      __aeHandler?: EventListener
+    }
+    // XHR 复用时清理上一轮残留 handler，防 loadend 监听器累积导致重复上报 + 计数注水
+    if (self.__aeHandler) {
+      this.removeEventListener('loadend', self.__aeHandler)
+      self.__aeHandler = undefined
+    }
+    // 上报端点不记录
+    self.__ae = isReportUrl(String(url), endpoint)
+      ? undefined
+      : {
+          method: String(method ?? 'GET').toUpperCase(),
+          url,
+          path: safePath(url),
+          started: performance.now(),
+          page_path: location.pathname,
+        }
+    ;(originalOpen as unknown as (...a: unknown[]) => void).apply(this, [method, url, ...rest])
+  }
+  XMLHttpRequest.prototype.send = function (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) {
+    const self = this as unknown as { __ae?: { method: string; url: string; path: string; started: number; page_path: string }; __aeHandler?: EventListener }
+    const meta = self.__ae
+    const reqBody =
+      logBody && body != null && typeof body === 'string' ? tryJson(body) : undefined
+    if (meta) {
+      if (self.__aeHandler) this.removeEventListener('loadend', self.__aeHandler)
+      const handler = () => {
+        const ok = this.status >= 200 && this.status < 400
+        let resBody: unknown
+        if (logBody) {
+          try {
+            if (this.responseType === '' || this.responseType === 'text') resBody = tryJson(this.responseText)
+            else if (this.responseType === 'json') resBody = this.response
+            else resBody = `[responseType=${this.responseType}]`
+          } catch {
+            /* 忽略 */
+          }
+        }
+        logApiCall(
+          {
+            method: meta.method,
+            path: meta.path,
+            url: meta.url,
+            ok,
+            duration_ms: Math.round(performance.now() - meta.started),
+            status: this.status,
+            request: reqBody,
+            response: resBody,
+            page_path: meta.page_path,
+            raw,
+          },
+          endpoint,
+        )
+      }
+      self.__aeHandler = handler
+      this.addEventListener('loadend', handler)
+    }
+    return originalSend.call(this, body)
+  }
+
+  return () => {
+    XMLHttpRequest.prototype.open = originalOpen
+    XMLHttpRequest.prototype.send = originalSend
+  }
+}
+
+function patchNav(endpoint: string): () => void {
+  if (typeof window === 'undefined' || !window.history) return () => {}
+  let from = location.pathname
+  const fire = () => {
+    const to = location.pathname
+    if (to !== from) {
+      logNav(from, to, endpoint)
+      from = to
+    }
+  }
+  const origPush = history.pushState
+  const origReplace = history.replaceState
+  history.pushState = function (...args: unknown[]) {
+    const r = (origPush as (...a: unknown[]) => void).apply(this, args)
+    fire()
+    return r
+  }
+  history.replaceState = function (...args: unknown[]) {
+    const r = (origReplace as (...a: unknown[]) => void).apply(this, args)
+    fire()
+    return r
+  }
+  const onPop = () => fire()
+  window.addEventListener('popstate', onPop)
+  return () => {
+    history.pushState = origPush
+    history.replaceState = origReplace
+    window.removeEventListener('popstate', onPop)
+  }
+}
+
+/**
+ * 一键自动埋点：fetch + XMLHttpRequest + 路由导航 + 全局错误。
+ * 在应用入口（main.tsx）调用一次即可，返回卸载函数。
+ * 0.2.0 新增——省去手动在每个拦截器里调 logApiCall。
+ */
+let autoInstrumentUndo: (() => void) | null = null
+export function autoInstrument(opts: AutoInstrumentOptions = {}): () => void {
+  if (!isDev()) return () => {}
+  // 幂等：重复调用（React StrictMode / HMR 快速刷新）返回已注册的卸载函数，避免多层包装
+  if (autoInstrumentUndo) return autoInstrumentUndo
+  const endpoint = opts.endpoint ?? DEFAULT_ENDPOINT
+  const logBody = opts.logBody ?? true
+  const raw = opts.raw ?? false
+  const undoFns = [patchFetch(endpoint, logBody, raw), patchXHR(endpoint, logBody, raw)]
+  if (opts.nav !== false) undoFns.push(patchNav(endpoint))
+  if (opts.errors !== false) undoFns.push(installAgentErrorReporter(endpoint))
+  const undo = () => {
+    undoFns.forEach((u) => u())
+    autoInstrumentUndo = null
+  }
+  autoInstrumentUndo = undo
+  return undo
 }

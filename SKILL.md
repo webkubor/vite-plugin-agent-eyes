@@ -1,7 +1,7 @@
 ---
 name: agent-eyes
 description: "给 AI agent 的自愈遥测层 — 在 Vite 项目里读结构化运行时日志（API/错误/代理 header），自我诊断、修复、验证，无需人读代码"
-version: 0.1.0
+version: 0.2.0
 ---
 
 # Vite Agent Debugger
@@ -26,13 +26,20 @@ export default defineConfig({
 })
 ```
 ```ts
-// 2. 应用入口 main.tsx
-import { installAgentErrorReporter } from 'vite-plugin-agent-eyes/client'
-installAgentErrorReporter()
+// 2. 应用入口文件（main.ts / main.tsx / main.js / index.js 皆可——框架无关）
 ```
+
+**推荐（0.2.0+）：一行自动埋点**，自动包装 fetch/XHR/路由导航/全局错误：
 ```ts
-// 3. HTTP 拦截器（fetch/ky/axios 包装）里，每次请求结束调用
-import { logApiCall } from 'vite-plugin-agent-eyes/client'
+import { autoInstrument } from 'vite-plugin-agent-eyes/client'
+autoInstrument()
+```
+
+**或手动埋点**（需精细控制时）：
+```ts
+import { installAgentErrorReporter, logApiCall } from 'vite-plugin-agent-eyes/client'
+installAgentErrorReporter()   // 捕获全局错误
+// 在 fetch/ky/axios 拦截器里，每次请求结束调用
 logApiCall({ method, path, url, ok, duration_ms, code, status, request_id, error, request, response })
 ```
 
@@ -44,7 +51,7 @@ logApiCall({ method, path, url, ok, duration_ms, code, status, request_id, error
 2. **读 `log/errors.log`** —— 定位"哪坏了"（最新在最上，`head` 即可）。
 3. **按线索下钻**：
    - 接口/字段问题 → `log/api-calls.log` 看**真实**请求/响应体（**绝不凭类型猜字段**）。
-   - 登录/cookie/CORS/302 等网络层 → `log/proxy.log` 看 `Cookie(req)` 与 `Set-Cookie`。
+   - 登录/cookie/CORS/302 等网络层 → `log/proxy-<host>.log` 看 `Cookie(req)` 与 `Set-Cookie`。
 4. **噪声预判**：未登录时 `/auth/session` 的 401、浏览器扩展的 `runtime.lastError` 都是**预期噪声**，不是 bug，别去追。
 5. **改代码 → 重启 dev**（vite 配置/插件改动 HMR 不重载，必须重启）**→ 重新触发 → 再读日志验证**。日志每次启动清空，看到的就是本次。
 
@@ -53,7 +60,7 @@ logApiCall({ method, path, url, ok, duration_ms, code, status, request_id, error
 ```
 api-calls.log:  POST .../auth/login  code=0        ← 登录成功
 api-calls.log:  GET  .../auth/session code=40101    ← 紧跟却未登录
-proxy.log:      GET  .../auth/session → 200 | Cookie(req): 无   ← 浏览器没带 cookie
+proxy-<host>.log: GET .../auth/session → 200 | Cookie(req): 无   ← 浏览器没带 cookie
 ```
 根因：上游 Set-Cookie 是 `Domain=<父域> + Secure + SameSite=None`，本地 `http://localhost` 域不匹配 + Secure 被丢 → 拒收。
 `agentProxy` 默认已在 dev 修复（去 Domain / 剥 Secure / SameSite=None→Lax）。关掉：`agentProxy(target, { rewriteCookiesForLocalhost: false })`。
@@ -64,4 +71,4 @@ proxy.log:      GET  .../auth/session → 200 | Cookie(req): 无   ← 浏览器
 |------|--------|
 | `log/api-calls.log` | API 全量 + 路由，带请求/响应体 |
 | `log/errors.log` | API 失败 + 前端运行时错误 |
-| `log/proxy.log` | 代理层 Cookie / Set-Cookie 属性 / status |
+| `log/proxy-<host>.log` | 代理层 Cookie / Set-Cookie 属性 / status（多代理按 host 分文件） |
