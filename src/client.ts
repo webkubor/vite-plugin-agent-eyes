@@ -3,7 +3,7 @@
  * 把 API 调用与前端运行时错误 POST 到 dev 端点（默认 /dev/log），由服务端插件落盘成 agent 可读遥测。
  * 仅 dev 生效。两种接入方式：
  *  - 手动埋点：logApiCall / logNav / logError + installAgentErrorReporter
- *  - 一键自动：autoInstrument()（自动包装 fetch/XHR/导航/全局错误）
+ *  - 一键自动：autoInstrument()（自动包装 fetch/XHR/导航/全局错误/控制台/DOM 快照）
  */
 
 const DEFAULT_ENDPOINT = '/dev/log'
@@ -38,6 +38,67 @@ function redact(v: unknown, raw: boolean, seen: WeakSet<object> = new WeakSet(),
   const out: Record<string, unknown> = {}
   for (const [k, val] of Object.entries(v)) out[k] = SENSITIVE_KEYS.test(k) ? '***' : redact(val, false, seen, depth + 1)
   return out
+}
+
+/* ---- 关联 ID（把同一次错误的 console/screenshot/DOM 串起来） ---- */
+let _correlationId: string | null = null
+let _correlationExpiry = 0
+const CORRELATION_TTL = 5000
+
+function newCorrelationId(): string {
+  _correlationId = Math.random().toString(36).slice(2, 10)
+  _correlationExpiry = Date.now() + CORRELATION_TTL
+  return _correlationId
+}
+
+function currentCorrelationId(): string | null {
+  if (!_correlationId || Date.now() > _correlationExpiry) return null
+  return _correlationId
+}
+
+/* ---- 控制台节流（防高频输出撑爆日志） ---- */
+const CONSOLE_BUFFER: { level: string; msg: string; count: number }[] = []
+const CONSOLE_FLUSH_MS = 500
+const CONSOLE_MAX_ENTRIES = 500
+let _consoleTimer: ReturnType<typeof setTimeout> | null = null
+let _consoleTotal = 0
+let _lastConsoleSig = ''
+
+function flushConsole(endpoint: string) {
+  _consoleTimer = null
+  if (CONSOLE_BUFFER.length === 0) return
+  const batch = CONSOLE_BUFFER.splice(0)
+  post(endpoint, { kind: 'console_batch', entries: batch })
+}
+
+function logConsole(level: string, msg: string, endpoint: string) {
+  if (_consoleTotal >= CONSOLE_MAX_ENTRIES) return
+
+  // 连续相同签名去重（同 level + 同 msg → 折叠计数）
+  const sig = `${level}:${msg}`
+  if (sig === _lastConsoleSig && CONSOLE_BUFFER.length > 0) {
+    CONSOLE_BUFFER[CONSOLE_BUFFER.length - 1].count++
+    return
+  }
+  _lastConsoleSig = sig
+
+  CONSOLE_BUFFER.push({ level, msg, count: 1 })
+  _consoleTotal++
+
+  if (_consoleTimer == null) {
+    _consoleTimer = setTimeout(() => flushConsole(endpoint), CONSOLE_FLUSH_MS)
+  }
+}
+
+/* ---- DOM 快照节流 ---- */
+let _lastDomSnapshot = 0
+const DOM_COOLDOWN = 2000
+
+function canSnapshotDom(): boolean {
+  const now = Date.now()
+  if (now - _lastDomSnapshot < DOM_COOLDOWN) return false
+  _lastDomSnapshot = now
+  return true
 }
 
 export interface ApiLogEntry {
@@ -87,11 +148,44 @@ export function logNav(from: string, to: string, endpoint: string = DEFAULT_ENDP
 /** 任意自定义错误行。 */
 export function logError(line: string, endpoint: string = DEFAULT_ENDPOINT) {
   if (!isDev()) return
-  post(endpoint, { kind: 'error', line })
+  const cid = currentCorrelationId()
+  post(endpoint, { kind: 'error', line, cid })
 }
 
+/** 记录控制台输出（全级别），内部节流。 */
+export function logConsoleEntry(level: string, args: unknown[], endpoint: string = DEFAULT_ENDPOINT) {
+  if (!isDev()) return
+  const msg = args
+    .map((a) => {
+      if (a instanceof Error) return a.stack ?? a.message
+      if (typeof a === 'object') {
+        try { return JSON.stringify(a) } catch { return String(a) }
+      }
+      return String(a)
+    })
+    .join(' ')
+  const cid = currentCorrelationId()
+  logConsole(level, cid ? `[${cid}] ${msg}` : msg, endpoint)
+}
+
+/** DOM 快照：抓取关键节点结构，供 agent 看"页面上渲染了什么"。带冷却控制。 */
+export function snapshotDom(endpoint: string = DEFAULT_ENDPOINT) {
+  if (!isDev() || typeof document === 'undefined') return
+  if (!canSnapshotDom()) return
+  try {
+    const body = document.body
+    if (!body) return
+    const html = body.innerHTML
+    const trimmed = html.length > 50000 ? html.slice(0, 50000) + '\n...[truncated]' : html
+    const cid = currentCorrelationId()
+    post(endpoint, { kind: 'dom', url: location.href, html: trimmed, cid })
+  } catch {}
+}
+
+const CONSOLE_LEVELS = ['log', 'warn', 'error', 'info', 'debug'] as const
+
 /**
- * 一次性挂上全局错误捕获：window error / unhandledrejection / console.error。
+ * 一次性挂上全局错误捕获：window error / unhandledrejection / 全控制台 / DOM 快照。
  * 在应用入口（main.tsx）调用一次。返回卸载函数。
  */
 let errReporterInstalled = false
@@ -99,26 +193,49 @@ export function installAgentErrorReporter(endpoint: string = DEFAULT_ENDPOINT): 
   if (!isDev() || typeof window === 'undefined' || errReporterInstalled) return () => {}
   errReporterInstalled = true
 
-  const onError = (e: ErrorEvent) =>
+  const onError = (e: ErrorEvent) => {
+    newCorrelationId()
     logError(`[frontend][uncaught] ${e.message} @ ${e.filename}:${e.lineno}:${e.colno}`, endpoint)
-  const onRejection = (e: PromiseRejectionEvent) =>
+    snapshotDom(endpoint)
+  }
+  const onRejection = (e: PromiseRejectionEvent) => {
+    newCorrelationId()
     logError(`[frontend][rejection] ${String((e.reason as Error)?.stack ?? e.reason)}`, endpoint)
+    snapshotDom(endpoint)
+  }
 
   window.addEventListener('error', onError)
   window.addEventListener('unhandledrejection', onRejection)
 
-  const originalConsoleError = console.error
-  console.error = (...args: unknown[]) => {
-    logError(`[frontend][console] ${args.map((a) => (a instanceof Error ? a.stack : String(a))).join(' ')}`, endpoint)
-    originalConsoleError.apply(console, args)
-  }
+  const undoConsole = patchConsole(endpoint)
 
   return () => {
     window.removeEventListener('error', onError)
     window.removeEventListener('unhandledrejection', onRejection)
-    console.error = originalConsoleError
+    undoConsole()
     errReporterInstalled = false
   }
+}
+
+/** 拦截全级别控制台输出，保留原始行为。返回卸载函数。 */
+function patchConsole(endpoint: string): () => void {
+  const originals: Record<string, (...args: unknown[]) => void> = {}
+  const undos: (() => void)[] = []
+  const con = console as unknown as Record<string, (...args: unknown[]) => void>
+
+  for (const level of CONSOLE_LEVELS) {
+    const original = con[level]
+    originals[level] = original
+    con[level] = (...args: unknown[]) => {
+      logConsoleEntry(level, args, endpoint)
+      original(...args)
+    }
+    undos.push(() => {
+      con[level] = originals[level]
+    })
+  }
+
+  return () => undos.forEach((u) => u())
 }
 
 /* ---- 自动埋点 ---- */
@@ -130,7 +247,7 @@ export interface AutoInstrumentOptions {
   raw?: boolean
   /** 自动捕获路由导航（默认 true） */
   nav?: boolean
-  /** 自动捕获全局错误（默认 true） */
+  /** 自动捕获全局错误 + 控制台 + DOM 快照（默认 true） */
   errors?: boolean
 }
 
@@ -317,9 +434,8 @@ function patchNav(endpoint: string): () => void {
 }
 
 /**
- * 一键自动埋点：fetch + XMLHttpRequest + 路由导航 + 全局错误。
+ * 一键自动埋点：fetch + XMLHttpRequest + 路由导航 + 全局错误 + 全控制台 + DOM 快照。
  * 在应用入口（main.tsx）调用一次即可，返回卸载函数。
- * 0.2.0 新增——省去手动在每个拦截器里调 logApiCall。
  */
 let autoInstrumentUndo: (() => void) | null = null
 export function autoInstrument(opts: AutoInstrumentOptions = {}): () => void {
