@@ -1,6 +1,7 @@
 import type { Plugin, ProxyOptions } from 'vite'
 import fs from 'node:fs'
 import path from 'node:path'
+import { execSync } from 'node:child_process'
 import { captureScreenshot } from './cdp'
 
 // git workflow（提交前检查 + 提交后 webhook）—— 独立导出，与遥测职责解耦
@@ -286,33 +287,105 @@ DOM 快照（log/snapshots/dom-{timestamp}.html）始终启用——错误时自
 需要 Chrome 带 \`--remote-debugging-port\` 启动（仅截图需要，DOM 快照不需要）。插件自动检测端口，未找到时静默跳过。
 `
 
+// 多 agent 并行：同目录、不同端口的多个 dev server 各写 log/<port>/，互不刷掉。
+// agentDebugger 在 listening 后解析真实端口并下发给 agentProxy 复用。
+let _resolvedLogPort: number | string | null = null
+function gitBranch(cwd: string): string {
+  try {
+    return execSync('git rev-parse --abbrev-ref HEAD', { cwd, stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim()
+  } catch {
+    return ''
+  }
+}
+// 顶层 log/ 台账：记录哪些端口/分支/进程在写日志，agent 按自己 dev 端口去 log/<port>/ 读
+function recordInstance(baseDir: string, port: number | string) {
+  const file = path.join(baseDir, 'instances.json')
+  let list: Array<Record<string, unknown>> = []
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
+    if (Array.isArray(parsed)) list = parsed
+  } catch {
+    /* 文件不存在或损坏，重建 */
+  }
+  list = list.filter((x) => x && x.pid !== process.pid && x.port !== port)
+  list.unshift({ port, dir: `log/${port}`, branch: gitBranch(baseDir), pid: process.pid, startedAt: ts() })
+  try {
+    fs.writeFileSync(file, JSON.stringify(list.slice(0, 20), null, 2))
+  } catch {
+    /* ignore */
+  }
+}
+
+const ROOT_MANIFEST = `# Agent 遥测日志（按 dev 端口隔离）
+
+多个 agent/dev server 可同目录、不同端口并行，**各自的日志在 \`log/<port>/\`**，互不覆盖。
+
+- 你的 dev 端口看 \`cs dev\` / vite 启动输出（如 5175）。
+- 你的日志在 \`log/<你的端口>/\`：\`errors.log\` / \`console.log\` / \`api-calls.log\` / \`proxy-*.log\` / \`snapshots/\`。
+- \`instances.json\` 列出当前在写日志的端口 / 分支 / pid，方便确认你该读哪个。
+
+读法见 \`log/<port>/README.md\`。
+`
+
 export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
-  const logDir = path.resolve(process.cwd(), options.logDir ?? 'log')
+  const baseDir = path.resolve(process.cwd(), options.logDir ?? 'log')
   const endpoint = options.endpoint ?? '/dev/log'
   const flushMs = options.flushMs ?? 200
   const maxBytes = options.maxBytes ?? 512 * 1024
   const screenshots = options.screenshots ?? false
-  const apiLog = path.join(logDir, 'api-calls.log')
-  const errLog = path.join(logDir, 'errors.log')
-  const consoleLogPath = path.join(logDir, 'console.log')
-  const snapshotsDir = path.join(logDir, 'snapshots')
+
+  // 端口确定后才初始化（log/<port>/）；HTTP 上报只会在 listening 之后到达，故 middleware 引用安全。
+  let apiWriter: LogWriter | null = null
+  let errAgg: ErrorAggregator | null = null
+  let consoleWriter: LogWriter | null = null
+  let snapshotsDir = path.join(baseDir, 'snapshots')
+
+  function initForPort(port: number | string) {
+    const logDir = path.join(baseDir, String(port))
+    snapshotsDir = path.join(logDir, 'snapshots')
+    fs.mkdirSync(snapshotsDir, { recursive: true })
+    const header = `# Dev Log (port ${port}) — started ${ts()}`
+    apiWriter = new LogWriter(path.join(logDir, 'api-calls.log'), flushMs, maxBytes)
+    errAgg = new ErrorAggregator(path.join(logDir, 'errors.log'), header, flushMs, 200)
+    consoleWriter = new LogWriter(path.join(logDir, 'console.log'), flushMs, maxBytes)
+    apiWriter.init(header)
+    errAgg.init()
+    consoleWriter.init(header)
+    fs.writeFileSync(path.join(logDir, 'README.md'), MANIFEST)
+    fs.writeFileSync(path.join(baseDir, 'README.md'), ROOT_MANIFEST)
+    _resolvedLogPort = port // 下发给 agentProxy
+    recordInstance(baseDir, port)
+  }
 
   return {
     name: 'vite-plugin-agent-eyes',
     apply: 'serve',
     configureServer(server) {
-      fs.mkdirSync(logDir, { recursive: true })
-      fs.mkdirSync(snapshotsDir, { recursive: true })
-      const header = `# Dev Log — started ${ts()}`
-      const apiWriter = new LogWriter(apiLog, flushMs, maxBytes)
-      const errAgg = new ErrorAggregator(errLog, header, flushMs, 200)
-      const consoleWriter = new LogWriter(consoleLogPath, flushMs, maxBytes)
-      apiWriter.init(header)
-      errAgg.init()
-      consoleWriter.init(header)
-      fs.writeFileSync(path.join(logDir, 'README.md'), MANIFEST)
+      fs.mkdirSync(baseDir, { recursive: true })
+      const hs = server.httpServer
+      if (hs) {
+        hs.once('listening', () => {
+          const addr = hs.address()
+          const port =
+            (addr && typeof addr === 'object' ? addr.port : null) ?? server.config.server?.port ?? 0
+          initForPort(port)
+        })
+      } else {
+        initForPort(server.config.server?.port ?? 'default')
+      }
 
       server.middlewares.use(endpoint, (req, res) => {
+        if (!apiWriter || !errAgg || !consoleWriter) {
+          res.statusCode = 204
+          res.end()
+          return
+        }
+        const aw = apiWriter
+        const ea = errAgg
+        const cw = consoleWriter
+        const snaps = snapshotsDir
         if (req.method !== 'POST') {
           res.statusCode = 405
           res.end()
@@ -341,27 +414,27 @@ export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
             const p = parse(body)
             if (p?.kind === 'api') {
               const detail = apiDetail(p)
-              apiWriter.push(`[${stamp}] ${detail}`)
+              aw.push(`[${stamp}] ${detail}`)
               if (!p.ok) {
-                errAgg.add(detail, stamp)
-                if (screenshots) captureScreenshot(snapshotsDir).catch(() => {})
+                ea.add(detail, stamp)
+                if (screenshots) captureScreenshot(snaps).catch(() => {})
               }
             } else if (p?.kind === 'nav') {
-              apiWriter.push(`[${stamp}] [nav] ${p.from || '(direct)'} → ${p.to}`)
+              aw.push(`[${stamp}] [nav] ${p.from || '(direct)'} → ${p.to}`)
             } else if (p?.kind === 'error') {
               const cidTag = p.cid ? ` [${p.cid}]` : ''
-              errAgg.add(`${cidTag} ${p.line}`, stamp)
-              if (screenshots) captureScreenshot(snapshotsDir).catch(() => {})
+              ea.add(`${cidTag} ${p.line}`, stamp)
+              if (screenshots) captureScreenshot(snaps).catch(() => {})
             } else if (p?.kind === 'console_batch') {
               for (const e of p.entries) {
                 const tag = e.count > 1 ? ` (×${e.count})` : ''
-                consoleWriter.push(`[${stamp}] [${e.level}] ${e.msg}${tag}`)
+                cw.push(`[${stamp}] [${e.level}] ${e.msg}${tag}`)
               }
             } else if (p?.kind === 'console') {
-              consoleWriter.push(`[${stamp}] [${p.level}] ${p.msg}`)
+              cw.push(`[${stamp}] [${p.level}] ${p.msg}`)
             } else if (p?.kind === 'dom') {
               const cidSuffix = p.cid ? `-${p.cid}` : ''
-              const domFile = path.join(snapshotsDir, `dom-${Date.now()}${cidSuffix}.html`)
+              const domFile = path.join(snaps, `dom-${Date.now()}${cidSuffix}.html`)
               try {
                 const doctype = '<!DOCTYPE html>\n'
                 const pageHtml = `${doctype}<html><head><meta charset="utf-8"><title>DOM Snapshot</title></head><body><!-- url: ${p.url} -->\n${p.html}\n</body></html>`
@@ -369,8 +442,8 @@ export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
               } catch {}
             } else if (body) {
               // 解析失败的 body：压成单行再记，避免多行破坏日志结构
-              errAgg.add(body.replace(/[\r\n]+/g, ' ⏎ ').slice(0, 500), stamp)
-              if (screenshots) captureScreenshot(snapshotsDir).catch(() => {})
+              ea.add(body.replace(/[\r\n]+/g, ' ⏎ ').slice(0, 500), stamp)
+              if (screenshots) captureScreenshot(snaps).catch(() => {})
             }
           } catch {
             /* 单条解析/写入失败不影响响应——避免 /dev/log 整体挂死 */
@@ -412,11 +485,21 @@ function proxyTag(target: string): string {
  */
 export function agentProxy(target: string, opts: AgentProxyOptions = {}): ProxyOptions {
   const rewrite = opts.rewriteCookiesForLocalhost ?? true
-  const logDir = path.resolve(process.cwd(), opts.logDir ?? 'log')
+  const baseDir = path.resolve(process.cwd(), opts.logDir ?? 'log')
   const flushMs = opts.flushMs ?? 200
   const maxBytes = opts.maxBytes ?? 512 * 1024
-  const proxyLog = path.join(logDir, `proxy-${proxyTag(target)}.log`)
-  const proxyWriter = new LogWriter(proxyLog, flushMs, maxBytes)
+
+  // 懒初始化：首个响应到达时端口已确定（agentDebugger 在 listening 时下发 _resolvedLogPort），
+  // 把 proxy 日志也归到 log/<port>/，与该 dev server 的其它日志同处、并行互不刷。
+  let proxyWriter: LogWriter | null = null
+  function writer(): LogWriter {
+    if (proxyWriter) return proxyWriter
+    const dir = _resolvedLogPort != null ? path.join(baseDir, String(_resolvedLogPort)) : baseDir
+    fs.mkdirSync(dir, { recursive: true })
+    proxyWriter = new LogWriter(path.join(dir, `proxy-${proxyTag(target)}.log`), flushMs, maxBytes)
+    proxyWriter.init(`# Proxy Log — started ${new Date().toISOString()}`)
+    return proxyWriter
+  }
 
   return {
     target,
@@ -424,9 +507,8 @@ export function agentProxy(target: string, opts: AgentProxyOptions = {}): ProxyO
     secure: true,
     ...opts.extra,
     configure: (proxy) => {
-      fs.mkdirSync(logDir, { recursive: true })
-      proxyWriter.init(`# Proxy Log — started ${new Date().toISOString()}`)
       proxy.on('proxyRes', (proxyRes, req) => {
+        const pw = writer()
         const reqCookie = req.headers?.cookie
         const reqNames = reqCookie
           ? reqCookie.split(';').map((s) => s.split('=')[0].trim()).join(',')
@@ -435,7 +517,7 @@ export function agentProxy(target: string, opts: AgentProxyOptions = {}): ProxyO
         const sc = setCookie
           ? setCookie.map((c) => c.replace(/^([^=]+)=[^;]*/, '$1=<redacted>')).join(' || ')
           : '无'
-        proxyWriter.push(`${req.method} ${req.url} → ${proxyRes.statusCode} | Cookie(req): ${reqNames} | Set-Cookie: ${sc}`)
+        pw.push(`${req.method} ${req.url} → ${proxyRes.statusCode} | Cookie(req): ${reqNames} | Set-Cookie: ${sc}`)
 
         if (rewrite && setCookie) {
           // 上游 cookie 常带父域 Domain + Secure + SameSite=None，http://localhost 存不住 → 登录成功却 401。

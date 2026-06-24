@@ -2,6 +2,14 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.6.0] - 2026-06-24
+
+### Added
+- **日志按 dev 端口隔离**：`agentDebugger` 日志改写到 `log/<port>/`（在 server listening 后取真实端口），并在顶层写 `log/instances.json` 台账（端口/分支/pid/启动时间）。解决「同目录、不同端口的多个 dev server / 多 agent 并行时互相清空、交叉写入日志」。`agentProxy` 也归到同端口目录（复用 listening 时下发的端口）。
+
+### Changed
+- **日志读取路径变化（破坏性）**：原 `log/errors.log` 等改为 `log/<port>/errors.log`。agent 从 dev 启动输出拿到自己端口后读 `log/<port>/`；顶层 `log/README.md` + `instances.json` 指引定位。
+
 ## [0.5.0] - 2026-06-24
 
 ### Added
@@ -80,7 +88,8 @@
 - 三类结构化日志：`api-calls.log` / `errors.log` / `proxy.log`
 - 招牌功能：本地 http 上游 `Set-Cookie` 改写（去 `Domain` / 剥 `Secure` / `SameSite=None → Lax`），解决「登录成功却一直 401」
 
-[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.6.0
 [0.5.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.5.0
 [0.4.1]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.4.1
 [0.4.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.4.0
