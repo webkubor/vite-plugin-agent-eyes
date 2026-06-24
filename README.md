@@ -56,9 +56,36 @@ export default defineConfig({
 })
 ```
 
+### 1.5 Git workflow：提交前检查 + 提交后 webhook（0.4.0+，可选）
+
+让**任意 Vite 项目零配置**获得「提交前检查 + 提交后通知」——装上插件、跑一次 `vite dev`，git 钩子自动就位，无需各项目再配 husky / `.git/hooks`。
+
+```ts
+import { agentDebugger, agentGit } from 'vite-plugin-agent-eyes'
+
+export default defineConfig({
+  plugins: [
+    agentDebugger(),
+    agentGit({
+      precommit: ['pnpm typecheck', 'pnpm lint'],        // 任一非零退出即阻断提交
+      webhook: {                                          // 提交成功后推送
+        url: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxxx',
+        format: 'feishu',                                 // 内置飞书；或 (info) => 自定义载荷
+      },
+      // claimHooksPath: true,  // 若你用了全局 core.hooksPath（lefthook 等），开此项让本项目钩子生效
+    }),
+  ],
+})
+```
+
+- 钩子内容**自包含**，`git commit` 时独立运行，不依赖 dev server 在跑。
+- 只接管带 `agent-eyes managed` 标记的钩子；遇到你已有的、非本插件写的钩子默认**不覆盖**（`force: true` 强制）。
+- 自定义通知：`webhook.format` 传 `(info: CommitInfo) => payload`（纯函数，会序列化进钩子脚本），`info` 含 `project / repo / author / branch / message / hash`。
+- 仅 dev 期安装钩子（`apply: 'serve'`）；不传 `precommit`/`webhook` 时为 no-op。
+
 ### 2. 客户端（你的应用入口文件）
 
-**推荐：一行自动埋点**（0.2.0+）——自动包装 `fetch` / `XMLHttpRequest` / 路由导航 / 全局错误，无需逐个拦截器手动埋点：
+**推荐：一行自动埋点**（0.2.0+）——自动包装 `fetch` / `XMLHttpRequest` / 路由导航 / 全局错误 / 全控制台 / DOM 快照，无需逐个拦截器手动埋点：
 
 ```ts
 import { autoInstrument } from 'vite-plugin-agent-eyes/client'
@@ -68,12 +95,18 @@ autoInstrument()
 **或手动埋点**（需要精细控制时）：
 
 ```ts
-import { installAgentErrorReporter, logApiCall } from 'vite-plugin-agent-eyes/client'
+import { installAgentErrorReporter, logApiCall, logConsole, snapshotDom } from 'vite-plugin-agent-eyes/client'
 
-installAgentErrorReporter()  // 捕获 window error / unhandledrejection / console.error
+installAgentErrorReporter()  // 捕获 window error / unhandledrejection / 全控制台 / DOM 快照
 
 // 在你的 fetch / ky / axios 拦截器里，请求结束后：
 logApiCall({ method, path, url, ok, duration_ms, code, status, request: reqBody, response: resBody })
+
+// 手动记录控制台
+logConsole('warn', ['deprecated API called'])
+
+// 手动抓 DOM 快照
+snapshotDom()
 ```
 
 ## 三类日志
@@ -84,9 +117,36 @@ logApiCall({ method, path, url, ok, duration_ms, code, status, request: reqBody,
 |------|------|--------|
 | **api-calls.log** | 全部 API（成功 + 失败）+ 路由跳转，带请求/响应体 | 查接口契约、定字段、调用顺序 |
 | **errors.log** | API 失败 + 前端运行时错误，**聚合去重 + 频率计数**（0.2.0） | 只看「哪坏了」、哪个刷得最凶 |
+| **console.log** | 全级别控制台输出（log/warn/error/info/debug） | React dev warning、库 deprecation、调试信息 |
 | **proxy-\<host\>.log** | 代理层 `Cookie` / `Set-Cookie` 属性 / status | 网络/鉴权层（fetch 看不到） |
+| **snapshots/** | 错误截图（PNG）+ DOM 快照（HTML） | 视觉+结构双重现场 |
 
 `log/README.md` 是给 agent 的自描述入口（启动时自动生成）。`errors.log` 顶部是 `Top Errors`（按频率降序），省去 agent 自己数频率。
+
+## 错误截图 + DOM 快照（0.3.0+）
+
+开启后，每次前端错误或 API 失败自动通过 CDP 截取当前页面，存入 `log/snapshots/err-{timestamp}.png`。同时自动 dump DOM 结构为 `log/snapshots/dom-{timestamp}.html`（无需 CDP）。
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  plugins: [
+    agentDebugger({ screenshots: true }),  // 开启截图（DOM 快照始终启用）
+  ],
+})
+```
+
+**前置条件**：Chrome 需要带 remote debugging 启动（仅截图需要，DOM 快照不需要）：
+
+```bash
+# macOS
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+
+# 或在现有 Chrome 里打开一个新窗口
+open -a "Google Chrome" --args --remote-debugging-port=9222
+```
+
+插件**自动检测** CDP 端口：先读 Chrome 进程参数，再扫描 9222-9232，找到即用。未找到时静默跳过，不影响现有日志。
 
 ## 招牌案例：登录成功却一直 401
 
@@ -110,6 +170,7 @@ proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req): 无   ←
 | `endpoint` | `'/dev/log'` | 接收前端上报的端点 |
 | `flushMs` | `200` | 落盘节流间隔（ms），高频上报只批写 |
 | `maxBytes` | `524288` | 单日志文件大小上限（字节），超过截断旧记录 |
+| `screenshots` | `false` | 错误时自动截图（通过 CDP） |
 
 ### `agentProxy(target, options?): ProxyOptions`
 
@@ -123,13 +184,28 @@ proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req): 无   ←
 
 > 多个代理各自按 target host 分文件（`proxy-api.example.com.log`、`proxy-admin.example.com.log`），互不覆盖。
 
+### `agentGit(options?): Plugin`
+
+| 选项 | 默认 | 说明 |
+|------|------|------|
+| `precommit` | `[]` | 提交前依次执行的命令，任一非零退出即阻断提交 |
+| `webhook` | — | `{ url, format }`；`format` 为 `'feishu'` 或 `(info: CommitInfo) => payload` |
+| `projectLabel` | 仓库名 | 通知里显示的项目名 |
+| `enabled` | `true` | 总开关 |
+| `force` | `false` | 覆盖已有的、非本插件管理的钩子 |
+| `claimHooksPath` | `false` | 全局 `core.hooksPath` 遮蔽本仓库钩子时，自动设本地覆盖让其生效 |
+
+> dev 启动时幂等安装 `pre-commit` / `post-commit` 到本仓库 hooks 目录（绝不写全局 hooks 目录）。`CommitInfo` 字段：`project / repo / author / branch / message / hash`。
+
 ### 客户端（`vite-plugin-agent-eyes/client`）
 
 | 函数 | 说明 |
 |------|------|
-| `autoInstrument(opts?)` | **一键自动埋点**：fetch + XHR + 导航 + 错误，各子项可独立开关，返回卸载函数。幂等（防 StrictMode/HMR 重复包装） |
-| `installAgentErrorReporter()` | 挂全局错误捕获，返回卸载函数 |
+| `autoInstrument(opts?)` | **一键自动埋点**：fetch + XHR + 导航 + 错误 + 全控制台 + DOM 快照，各子项可独立开关，返回卸载函数。幂等（防 StrictMode/HMR 重复包装） |
+| `installAgentErrorReporter()` | 挂全局错误捕获 + 全控制台拦截 + DOM 快照，返回卸载函数 |
 | `logApiCall(entry)` | 在 HTTP 拦截器记录一次 API 调用（默认脱敏敏感字段，`entry.raw=true` 放行） |
+| `logConsole(level, args)` | 记录一条控制台输出（log/warn/error/info/debug） |
+| `snapshotDom()` | 抓取当前页面 DOM 结构（document.body.innerHTML），供 agent 解析 |
 | `logNav(from, to)` | 记录路由导航轨迹 |
 | `logError(line)` | 记录任意自定义错误行 |
 
@@ -144,8 +220,9 @@ proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req): 无   ←
 
 - **🟡 敏感脱敏仍需扩展**：`csrfToken` 等 camelCase 变体已覆盖（0.2.0），但 `ssn` / `credit_card` / `cvv` 等 PII 未纳入黑名单——按业务需要自行扩展 `redact` 或用 `raw` 控制。
 - **🟡 长日志仍可能截断半行**：`maxBytes` 截断当前按字符，下个版本改为按行 + 字节精确衡量。
-- **🟡 dev server 退出时未 flush**：节流窗口内最后一批 buffer 可能不落盘，下个版本挂 server `close` hook。
-- **🟡 console.error 全量上报**：React dev warning 等噪声也进 errors.log，下个版本加采样/过滤。
+- **🟡 dev server 退出时未 flush**：节流窗口内最后一批 buffer（console/截图）可能不落盘，下个版本挂 server `close` hook。
+- **🟡 日志关联仍靠 cid 字符串匹配**：当前通过 correlation ID 串联同一次错误的 console/DOM/screenshot，但文件名和日志行里的 cid 需要 agent 自己 grep 匹配。下个版本可加索引文件 `log/correlations.json`。
+- **🟡 DOM 快照只抓 body.innerHTML**：不含 computed styles / pseudo elements，视觉相关问题仍依赖 CDP 截图。下个版本可考虑抓关键元素的盒模型数据。
 
 > 欢迎在 [Issues](https://github.com/webkubor/vite-plugin-agent-eyes/issues) 反馈，或直接 PR。
 

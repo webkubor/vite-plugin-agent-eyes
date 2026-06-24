@@ -1,6 +1,11 @@
 import type { Plugin, ProxyOptions } from 'vite'
 import fs from 'node:fs'
 import path from 'node:path'
+import { captureScreenshot } from './cdp'
+
+// git workflow（提交前检查 + 提交后 webhook）—— 独立导出，与遥测职责解耦
+export { agentGit } from './git'
+export type { AgentGitOptions, AgentGitWebhook, CommitInfo } from './git'
 
 /**
  * vite-plugin-agent-eyes —— 给 AI agent 的自愈遥测层（不是给人看的 dev 日志）。
@@ -23,6 +28,8 @@ export interface AgentDebuggerOptions {
   flushMs?: number
   /** 单个日志文件大小上限（字节），默认 512KB——超过截断旧记录 */
   maxBytes?: number
+  /** 错误时自动截图（通过 CDP），默认 false */
+  screenshots?: boolean
 }
 
 type ApiPayload = {
@@ -41,8 +48,11 @@ type ApiPayload = {
   response?: unknown
 }
 type NavPayload = { kind: 'nav'; from: string; to: string }
-type ErrorPayload = { kind: 'error'; line: string }
-type DevLogPayload = ApiPayload | NavPayload | ErrorPayload
+type ErrorPayload = { kind: 'error'; line: string; cid?: string }
+type ConsolePayload = { kind: 'console'; level: string; msg: string }
+type ConsoleBatchPayload = { kind: 'console_batch'; entries: { level: string; msg: string; count: number }[] }
+type DomPayload = { kind: 'dom'; url: string; html: string; cid?: string }
+type DevLogPayload = ApiPayload | NavPayload | ErrorPayload | ConsolePayload | ConsoleBatchPayload | DomPayload
 
 const HEADER_SEP = '\n\n'
 
@@ -96,6 +106,9 @@ function parse(raw: string): DevLogPayload | null {
     if (p.kind === 'api' && (p as ApiPayload).method && (p as ApiPayload).path) return p as DevLogPayload
     if (p.kind === 'nav' && (p as NavPayload).to) return p as DevLogPayload
     if (p.kind === 'error' && (p as ErrorPayload).line) return p as DevLogPayload
+    if (p.kind === 'console' && (p as ConsolePayload).msg) return p as DevLogPayload
+    if (p.kind === 'console_batch' && (p as ConsoleBatchPayload).entries?.length) return p as DevLogPayload
+    if (p.kind === 'dom' && (p as DomPayload).html) return p as DevLogPayload
   } catch {
     return null
   }
@@ -253,8 +266,10 @@ const MANIFEST = `# Agent 自愈遥测（log/）
 ## 排查顺序（读日志 → 定位 → 改 → 重启 dev → 再读验证）
 
 1. **errors.log** —— 先看"哪坏了"：顶部是 Top Errors（聚合去重 + 频率），下方是最近原始记录。
-2. **api-calls.log** —— 若是接口问题：看真实请求/响应体（别凭类型猜字段）、调用顺序。
-3. **proxy-<host>.log** —— 若是网络/鉴权层：请求带的 Cookie、响应的 Set-Cookie 属性、status。多个代理各自按 target host 分文件。fetch 看不到这层。
+2. **console.log** —— 全级别控制台输出（log/warn/error/info/debug），React dev warning、库 deprecation 警告都在这里。
+3. **api-calls.log** —— 若是接口问题：看真实请求/响应体（别凭类型猜字段）、调用顺序。
+4. **proxy-<host>.log** —— 若是网络/鉴权层：请求带的 Cookie、响应的 Set-Cookie 属性、status。多个代理各自按 target host 分文件。fetch 看不到这层。
+5. **snapshots/** —— 错误时自动截图（PNG）+ DOM 快照（HTML），视觉+结构双重现场。
 
 最新记录在文件**最上方**（header 之后），\`head\` 即看本次会话最近发生了什么。
 errors.log 的 Top Errors 区直接告诉你"哪个错误刷得最凶"，省去自己数频率。
@@ -264,6 +279,11 @@ api-calls.log 见 \`POST .../login code=0\` 紧跟 \`GET .../session 401\`
 → proxy-<host>.log 看那条 session 的 Cookie(req)：若为「无」，说明浏览器没存住登录 cookie。
 常见根因：上游 Set-Cookie 带父域 Domain + Secure + SameSite=None，http://localhost 域不匹配且 Secure 被丢弃。
 修复：agentProxy 已在 dev 对 Set-Cookie 去 Domain / 剥 Secure / SameSite=None→Lax。
+
+## 错误截图 + DOM 快照（snapshots/）
+开启 \`agentDebugger({ screenshots: true })\` 后，每次前端错误或 API 失败自动截取当前页面 PNG，存入 log/snapshots/err-{timestamp}.png。
+DOM 快照（log/snapshots/dom-{timestamp}.html）始终启用——错误时自动 dump document.body 结构，agent 可解析。
+需要 Chrome 带 \`--remote-debugging-port\` 启动（仅截图需要，DOM 快照不需要）。插件自动检测端口，未找到时静默跳过。
 `
 
 export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
@@ -271,19 +291,25 @@ export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
   const endpoint = options.endpoint ?? '/dev/log'
   const flushMs = options.flushMs ?? 200
   const maxBytes = options.maxBytes ?? 512 * 1024
+  const screenshots = options.screenshots ?? false
   const apiLog = path.join(logDir, 'api-calls.log')
   const errLog = path.join(logDir, 'errors.log')
+  const consoleLogPath = path.join(logDir, 'console.log')
+  const snapshotsDir = path.join(logDir, 'snapshots')
 
   return {
     name: 'vite-plugin-agent-eyes',
     apply: 'serve',
     configureServer(server) {
       fs.mkdirSync(logDir, { recursive: true })
+      fs.mkdirSync(snapshotsDir, { recursive: true })
       const header = `# Dev Log — started ${ts()}`
       const apiWriter = new LogWriter(apiLog, flushMs, maxBytes)
       const errAgg = new ErrorAggregator(errLog, header, flushMs, 200)
+      const consoleWriter = new LogWriter(consoleLogPath, flushMs, maxBytes)
       apiWriter.init(header)
       errAgg.init()
+      consoleWriter.init(header)
       fs.writeFileSync(path.join(logDir, 'README.md'), MANIFEST)
 
       server.middlewares.use(endpoint, (req, res) => {
@@ -316,14 +342,35 @@ export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
             if (p?.kind === 'api') {
               const detail = apiDetail(p)
               apiWriter.push(`[${stamp}] ${detail}`)
-              if (!p.ok) errAgg.add(detail, stamp)
+              if (!p.ok) {
+                errAgg.add(detail, stamp)
+                if (screenshots) captureScreenshot(snapshotsDir).catch(() => {})
+              }
             } else if (p?.kind === 'nav') {
               apiWriter.push(`[${stamp}] [nav] ${p.from || '(direct)'} → ${p.to}`)
             } else if (p?.kind === 'error') {
-              errAgg.add(p.line, stamp)
+              const cidTag = p.cid ? ` [${p.cid}]` : ''
+              errAgg.add(`${cidTag} ${p.line}`, stamp)
+              if (screenshots) captureScreenshot(snapshotsDir).catch(() => {})
+            } else if (p?.kind === 'console_batch') {
+              for (const e of p.entries) {
+                const tag = e.count > 1 ? ` (×${e.count})` : ''
+                consoleWriter.push(`[${stamp}] [${e.level}] ${e.msg}${tag}`)
+              }
+            } else if (p?.kind === 'console') {
+              consoleWriter.push(`[${stamp}] [${p.level}] ${p.msg}`)
+            } else if (p?.kind === 'dom') {
+              const cidSuffix = p.cid ? `-${p.cid}` : ''
+              const domFile = path.join(snapshotsDir, `dom-${Date.now()}${cidSuffix}.html`)
+              try {
+                const doctype = '<!DOCTYPE html>\n'
+                const pageHtml = `${doctype}<html><head><meta charset="utf-8"><title>DOM Snapshot</title></head><body><!-- url: ${p.url} -->\n${p.html}\n</body></html>`
+                fs.writeFileSync(domFile, pageHtml)
+              } catch {}
             } else if (body) {
               // 解析失败的 body：压成单行再记，避免多行破坏日志结构
               errAgg.add(body.replace(/[\r\n]+/g, ' ⏎ ').slice(0, 500), stamp)
+              if (screenshots) captureScreenshot(snapshotsDir).catch(() => {})
             }
           } catch {
             /* 单条解析/写入失败不影响响应——避免 /dev/log 整体挂死 */

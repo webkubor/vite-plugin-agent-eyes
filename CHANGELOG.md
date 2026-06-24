@@ -1,6 +1,38 @@
 # Changelog
 
-本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/)。
+本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
+
+## [0.4.0] - 2026-06-24
+
+### Added
+- **`agentGit()` 插件**：让任意 Vite 项目**零配置**获得「提交前检查 + 提交后 webhook 推送」——dev 启动时幂等安装 git 钩子，无需各项目再配 husky / `.git/hooks`
+  - `precommit`：提交前依次执行命令，任一非零退出即阻断提交
+  - `webhook`：提交成功后推送，内置 `'feishu'` 格式，亦支持 `(info) => payload` 自定义函数（序列化进钩子脚本）
+  - 钩子内容自包含，`git commit` 时独立运行，不依赖 dev server
+  - `force` / `claimHooksPath` 选项：保护已有钩子、兼容全局 `core.hooksPath`（lefthook 等）
+
+### 安全取向
+- 只接管带 `agent-eyes managed` 标记的钩子，默认不覆盖用户已有钩子
+- 绝不写入全局 hooks 目录；检测到全局 `core.hooksPath` 遮蔽时告警（或经 `claimHooksPath` 显式接管）
+- 仅在传了 `precommit` / `webhook` 时启用，否则 no-op
+
+## [0.3.0] - 2026-06-22
+
+### Added
+- **全控制台日志**：自动拦截 `console.log` / `warn` / `error` / `info` / `debug`，写入 `log/console.log`，保留原始行为
+- **DOM 快照**：错误时自动 dump `document.body.innerHTML` 为 HTML 文件，存入 `log/snapshots/dom-{timestamp}.html`，无需 CDP
+- **CDP 错误截图**：通过 Chrome DevTools Protocol 自动截取当前页面 PNG，存入 `log/snapshots/err-{timestamp}.png`
+- **CDP 端口自动检测**：优先读 Chrome 进程参数，再扫描 9222-9232，无需手动配置端口
+- `logConsole()` / `snapshotDom()` 客户端 API
+
+### Fixed
+- **控制台节流**：连续相同消息去重折叠（×N），批量 flush（500ms），上限 500 条/session，防高频输出撑爆日志
+- **DOM 快照冷却**：2 秒 cooldown，防循环报错瞬间产生几百个文件
+- **关联 ID**：同一次错误的 console/DOM/screenshot 自动带 `cid` 标签，agent 可按 ID 串联诊断
+
+### Changed
+- `installAgentErrorReporter` 现在同时拦截全控制台 + 触发 DOM 快照
+- 日志文件新增 `console.log`，MANIFEST/README 自动更新
 
 ## [0.2.0] - 2026-06-16
 
@@ -38,6 +70,8 @@
 - 三类结构化日志：`api-calls.log` / `errors.log` / `proxy.log`
 - 招牌功能：本地 http 上游 `Set-Cookie` 改写（去 `Domain` / 剥 `Secure` / `SameSite=None → Lax`），解决「登录成功却一直 401」
 
-[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.4.0
+[0.3.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.3.0
 [0.2.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.2.0
 [0.1.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.1.0
