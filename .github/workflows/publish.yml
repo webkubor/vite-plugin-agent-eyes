@@ -6,7 +6,6 @@ on:
       - 'v*'
 
 permissions:
-  id-token: write # OIDC 必需
   contents: read
 
 jobs:
@@ -21,4 +20,6 @@ jobs:
           package-manager-cache: false
       - run: npm install # 项目未入库 lockfile，用 install 替代 ci
       - run: npm run build
-      - run: npm publish # OIDC 自动认证，无需 NODE_AUTH_TOKEN
+      - run: npm publish # token 认证：NPM_TOKEN secret（复用本地登录 token）
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

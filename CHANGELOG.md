@@ -2,6 +2,11 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.4.1] - 2026-06-24
+
+### Changed
+- CI 发布改用 token 认证（`NPM_TOKEN` secret），修复 OIDC 可信发布未配置导致的 `git tag` → CI 自动发布失败（E404）
+
 ## [0.4.0] - 2026-06-24
 
 ### Added
@@ -70,7 +75,8 @@
 - 三类结构化日志：`api-calls.log` / `errors.log` / `proxy.log`
 - 招牌功能：本地 http 上游 `Set-Cookie` 改写（去 `Domain` / 剥 `Secure` / `SameSite=None → Lax`），解决「登录成功却一直 401」
 
-[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.4.1
 [0.4.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.4.0
 [0.3.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.3.0
 [0.2.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.2.0

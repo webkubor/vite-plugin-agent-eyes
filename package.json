@@ -1,6 +1,6 @@
 {
   "name": "vite-plugin-agent-eyes",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "给 AI agent 的自愈遥测层：结构化运行时日志（API/错误/代理 header）+ 本地 cookie 修复，让 agent 自我诊断、自我修复。Agent-readable runtime telemetry for Vite dev.",
   "type": "module",
   "license": "MIT",
