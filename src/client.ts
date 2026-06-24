@@ -101,6 +101,25 @@ function canSnapshotDom(): boolean {
   return true
 }
 
+/* ---- 错误上报节流（防渲染死循环 / SW 重试刷爆日志，源头去重） ---- */
+const ERROR_THROTTLE_MS = 5000
+const _errRecent = new Map<string, number>()
+// 去 HMR 版本戳（?t=\d+），避免同一错误因热更新戳不同绕过去重
+function errorKey(line: string): string {
+  return line.replace(/\?t=\d+/g, '').slice(0, 300)
+}
+function errorThrottled(line: string): boolean {
+  const key = errorKey(line)
+  const now = Date.now()
+  const last = _errRecent.get(key)
+  if (last && now - last < ERROR_THROTTLE_MS) return true
+  _errRecent.set(key, now)
+  if (_errRecent.size > 200) {
+    for (const [k, ts] of _errRecent) if (now - ts >= ERROR_THROTTLE_MS) _errRecent.delete(k)
+  }
+  return false
+}
+
 export interface ApiLogEntry {
   method: string
   path: string
@@ -145,9 +164,10 @@ export function logNav(from: string, to: string, endpoint: string = DEFAULT_ENDP
   post(endpoint, { kind: 'nav', from, to })
 }
 
-/** 任意自定义错误行。 */
+/** 任意自定义错误行。同一错误 5s 内只上报一次（去 HMR 时间戳），防渲染死循环 / SW 重试刷爆。 */
 export function logError(line: string, endpoint: string = DEFAULT_ENDPOINT) {
   if (!isDev()) return
+  if (errorThrottled(line)) return
   const cid = currentCorrelationId()
   post(endpoint, { kind: 'error', line, cid })
 }

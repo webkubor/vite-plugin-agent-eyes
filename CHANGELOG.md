@@ -2,6 +2,11 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.5.0] - 2026-06-24
+
+### Added
+- **客户端错误上报节流**：`logError` / `installAgentErrorReporter`（含 `autoInstrument({errors:true})`）现对同一错误 **5s 内只上报一次**，并去除 HMR 版本戳（`?t=\d+`）再去重，从源头防渲染死循环 / SW 重试刷爆日志（吸收实战教训，可放心替代各项目自维护的错误上报）
+
 ## [0.4.1] - 2026-06-24
 
 ### Changed
@@ -75,7 +80,8 @@
 - 三类结构化日志：`api-calls.log` / `errors.log` / `proxy.log`
 - 招牌功能：本地 http 上游 `Set-Cookie` 改写（去 `Domain` / 剥 `Secure` / `SameSite=None → Lax`），解决「登录成功却一直 401」
 
-[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.5.0
 [0.4.1]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.4.1
 [0.4.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.4.0
 [0.3.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.3.0
