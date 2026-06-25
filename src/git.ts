@@ -29,6 +29,8 @@ export interface CommitInfo {
   message: string
   /** 短 hash */
   hash: string
+  /** 提交时间（UTC 格式） */
+  timestamp: string
 }
 
 export interface AgentGitWebhook {
@@ -45,8 +47,8 @@ export interface AgentGitWebhook {
 export interface AgentGitOptions {
   /** 提交前依次执行的命令；任一非零退出即阻断提交。例：['pnpm typecheck', 'pnpm lint'] */
   precommit?: string[]
-  /** 提交成功后推送通知 */
-  webhook?: AgentGitWebhook
+  /** 提交成功后推送通知，支持单个或多个 webhook */
+  webhook?: AgentGitWebhook | AgentGitWebhook[]
   /** 通知里显示的项目名，默认取仓库名 */
   projectLabel?: string
   /** 总开关，默认 true */
@@ -135,26 +137,37 @@ ${MARK_END}
 }
 
 /** 生成自包含的通知脚本（webhook 地址与格式烘焙进去，git commit 时独立运行）。 */
-function notifyScript(webhook: AgentGitWebhook, projectLabel?: string): string {
-  const url = JSON.stringify(webhook.url)
+function notifyScript(webhooks: AgentGitWebhook | AgentGitWebhook[], projectLabel?: string): string {
+  const webhookList = Array.isArray(webhooks) ? webhooks : [webhooks]
   const label = projectLabel ? JSON.stringify(projectLabel) : 'null'
-  const isFn = typeof webhook.format === 'function'
-  const fnSrc = isFn ? (webhook.format as (i: CommitInfo) => unknown).toString() : 'null'
+  
+  // 为每个webhook生成配置
+  const webhookConfigs = webhookList.map((webhook, index) => {
+    const isFn = typeof webhook.format === 'function'
+    const fnSrc = isFn ? (webhook.format as (i: CommitInfo) => unknown).toString() : 'null'
+    return {
+      url: JSON.stringify(webhook.url),
+      format: fnSrc,
+      key: `webhook_${index}`
+    }
+  })
+
   return `// 由 vite-plugin-agent-eyes (agentGit) 生成，请勿手改——改 vite.config 后重启 dev 会重写。
 import { execSync } from 'node:child_process'
 import { basename } from 'node:path'
 
 const g = (a) => { try { return execSync('git ' + a, { stdio: ['ignore','pipe','ignore'] }).toString().trim() } catch { return '' } }
 
-const url = ${url}
-if (!url) process.exit(0)
 const repo = basename((g('config --get remote.origin.url') || '').replace(/\\.git$/, '')) || basename(g('rev-parse --show-toplevel'))
+const now = new Date()
+const timestamp = now.toISOString().replace('T', ' ').replace(/\\.\\d+Z$/, ' UTC')
 const info = {
   project: ${label} || repo,
   repo,
   author: g('log -1 --pretty=%an'),
   branch: g('rev-parse --abbrev-ref HEAD'),
   hash: g('rev-parse --short HEAD'),
+  timestamp,
   message: g('log -1 --pretty=%B')
     .split('\\n')
     .filter((l) => !/^\\s*(co-authored-by|signed-off-by)\\s*:/i.test(l) && !/🤖\\s*Generated with/i.test(l))
@@ -162,19 +175,42 @@ const info = {
     .trim(),
 }
 
-const customFormat = ${fnSrc}
-let payload
-if (typeof customFormat === 'function') {
-  payload = customFormat(info)
-} else {
-  // 飞书群机器人 text 消息
-  payload = { msg_type: 'text', content: { text: \`📝 [\${info.project}] \${info.author} 提交（\${info.branch}）\\n\${info.message}\` } }
-}
+// 支持多个 webhook 推送
+const webhooks = [
+  ${webhookConfigs.map(config => `{
+    url: ${config.url},
+    format: ${config.format}
+  }`).join(',\n  ')}
+]
 
-try {
-  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-} catch {
-  /* 静默：通知失败不影响提交 */
+// 逐个推送，失败不影响其他
+for (const webhook of webhooks) {
+  if (!webhook.url) continue
+  
+  let payload
+  if (typeof webhook.format === 'function') {
+    payload = webhook.format(info)
+  } else {
+    // 飞书群机器人 text 消息
+    payload = { 
+      msg_type: 'text', 
+      content: { 
+        text: \`📝 [\${info.project}] \${info.author} 提交（\${info.branch}）\\n\` +
+              \`🕐 \${info.timestamp}\\n\` +
+              \`📝 \${info.message}\`
+      } 
+    }
+  }
+
+  try {
+    await fetch(webhook.url, { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify(payload) 
+    })
+  } catch {
+    /* 静默：单个 webhook 通知失败不影响其他 */
+  }
 }
 `
 }
@@ -237,10 +273,13 @@ export function agentGit(options: AgentGitOptions = {}): Plugin {
       }
 
       // post-commit + 通知脚本
-      if (webhook?.url) {
+      const hasWebhook = Array.isArray(webhook) 
+        ? webhook.some(w => w?.url) 
+        : webhook?.url
+      if (hasWebhook) {
         const notifyFile = path.join(hooksDir, 'agent-eyes-notify.mjs')
         const file = path.join(hooksDir, 'post-commit')
-        const wroteNotify = writeIfChanged(notifyFile, notifyScript(webhook, projectLabel))
+        const wroteNotify = writeIfChanged(notifyFile, notifyScript(webhook!, projectLabel))
         if (!force && !isManageable(file)) {
           warn(`已存在非本插件管理的 post-commit，跳过（如需接管请设 force:true 或手动合并）`)
         } else {
