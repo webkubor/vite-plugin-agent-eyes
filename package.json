@@ -37,9 +37,9 @@
   ],
   "scripts": {
     "build": "tsup src/index.ts src/client.ts --format esm --dts --clean",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
-    "build:tmp": "tsup src/index.ts src/client.ts --format esm --dts --clean --out-dir /tmp/vite-plugin-agent-eyes-build",
+    "build:tmp": "tsup src/index.ts src/client.ts --format esm --dts --clean --out-dir .tmp/vite-plugin-agent-eyes-build",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {

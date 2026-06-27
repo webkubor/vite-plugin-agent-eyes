@@ -2,8 +2,10 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { createGuardHookScript } from '../src/guard'
+
+let createdRepos: string[] = []
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
@@ -11,6 +13,7 @@ function git(cwd: string, args: string[]): string {
 
 function makeRepo(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-eyes-guard-'))
+  createdRepos = [...createdRepos, dir]
   git(dir, ['init'])
   git(dir, ['config', 'user.email', 'test@example.com'])
   git(dir, ['config', 'user.name', 'Test User'])
@@ -18,6 +21,13 @@ function makeRepo(): string {
 }
 
 describe('generated guard hook script', () => {
+  afterEach(() => {
+    for (const dir of createdRepos) {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+    createdRepos = []
+  })
+
   it('blocks staged secrets in block mode', () => {
     const dir = makeRepo()
     fs.mkdirSync(path.join(dir, '.git', 'hooks'), { recursive: true })

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeGuardConfig, runTextChecks } from '../src/guard'
 
+type GuardResultItem = {
+  check: string
+  severity: string
+}
+
 describe('normalizeGuardConfig', () => {
   it('defaults to block level with default checks enabled', () => {
     const config = normalizeGuardConfig()
@@ -25,7 +30,7 @@ describe('normalizeGuardConfig', () => {
 describe('runTextChecks', () => {
   it('finds secret-like additions, TODO additions, any types, and console.log', () => {
     const config = normalizeGuardConfig({ level: 'block' })
-    const items = runTextChecks(
+    const items: GuardResultItem[] = runTextChecks(
       {
         path: 'src/example.ts',
         content: [
