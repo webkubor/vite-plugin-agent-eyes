@@ -16,11 +16,11 @@ const MARK_END = '# <<< agent-eyes managed guard <<<'
 const GUARD_FILE_NAME = 'agent-eyes-guard.mjs'
 
 interface GitHooks {
-  /** 本仓库默认 hooks 目录。 */
+  /** 本插件要安装到的 hooks 目录：local hooksPath 或本仓库默认 hooks。 */
   repoHooks: string
   /** 当前 git 实际读取的 hooks 目录。 */
   effectiveHooks: string
-  /** 当前 core.hooksPath 是否遮蔽了本仓库默认 hooks。 */
+  /** 当前 effective hooksPath 是否遮蔽了本插件安装目录。 */
   shadowed: boolean
 }
 
@@ -44,11 +44,13 @@ function repoHooksDir(root: string): string | null {
 function resolveHooks(root: string): GitHooks | null {
   if (gitOutput(root, ['rev-parse', '--is-inside-work-tree']) !== 'true') return null
 
-  const repoHooks = repoHooksDir(root)
-  if (!repoHooks) return null
+  const defaultHooks = repoHooksDir(root)
+  if (!defaultHooks) return null
 
-  const configuredHooks = gitOutput(root, ['config', '--get', 'core.hooksPath'])
-  const effectiveHooks = configuredHooks ? resolveFromRoot(root, configuredHooks) : repoHooks
+  const localHooksPath = gitOutput(root, ['config', '--local', '--get', 'core.hooksPath'])
+  const effectiveHooksPath = gitOutput(root, ['config', '--get', 'core.hooksPath'])
+  const repoHooks = localHooksPath ? resolveFromRoot(root, localHooksPath) : defaultHooks
+  const effectiveHooks = effectiveHooksPath ? resolveFromRoot(root, effectiveHooksPath) : defaultHooks
 
   return {
     repoHooks,
@@ -78,11 +80,15 @@ function isManageable(file: string): boolean {
   }
 }
 
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
+
 function preCommitScript(guardFile: string): string {
   return `#!/usr/bin/env sh
 ${MARK_BEGIN}
 # agentGuard: block commits when staged changes violate guard rules.
-node "${guardFile}" || exit 1
+node ${shellQuote(guardFile)} || exit 1
 ${MARK_END}
 `
 }
@@ -116,14 +122,14 @@ export function agentGuard(options: AgentGuardOptions = {}): Plugin {
 
       fs.mkdirSync(hooks.repoHooks, { recursive: true })
 
-      const guardFile = path.join(hooks.repoHooks, GUARD_FILE_NAME)
-      writeIfChanged(guardFile, createGuardHookScript(options))
-
       const preCommitFile = path.join(hooks.repoHooks, 'pre-commit')
       if (!isManageable(preCommitFile)) {
         warn('已存在非 agent-eyes 管理的 pre-commit，跳过；请手动合并 agentGuard 钩子。')
         return
       }
+
+      const guardFile = path.join(hooks.repoHooks, GUARD_FILE_NAME)
+      writeIfChanged(guardFile, createGuardHookScript(options))
 
       if (writeIfChanged(preCommitFile, preCommitScript(guardFile))) {
         fs.chmodSync(preCommitFile, 0o755)

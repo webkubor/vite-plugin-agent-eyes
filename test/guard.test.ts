@@ -27,6 +27,14 @@ function tempGitRepo(): string {
   return root
 }
 
+function tempGitRepoWithName(name: string): string {
+  const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'agent-guard-')), name)
+  fs.mkdirSync(root)
+  execFileSync('git', ['init'], { cwd: root, stdio: 'ignore' })
+  execFileSync('git', ['config', '--local', 'core.hooksPath', '.git/hooks'], { cwd: root, stdio: 'ignore' })
+  return root
+}
+
 function fakeServer(root: string): ViteDevServer {
   return {
     config: {
@@ -106,22 +114,49 @@ describe('agentGuard Vite plugin', () => {
     const guardFile = path.join(hooksDir, 'agent-eyes-guard.mjs')
     const preCommitFile = path.join(hooksDir, 'pre-commit')
     const preCommit = fs.readFileSync(preCommitFile, 'utf8')
+    const quotedGuardFile = `'${guardFile}'`
 
     expect(fs.existsSync(guardFile)).toBe(true)
     expect(preCommit).toContain('agent-eyes managed')
-    expect(preCommit).toContain(`node "${guardFile}" || exit 1`)
+    expect(preCommit).toContain(`node ${quotedGuardFile} || exit 1`)
+    expect(preCommit).not.toContain(`node "${guardFile}" || exit 1`)
     expect(fs.statSync(preCommitFile).mode & 0o111).toBeGreaterThan(0)
+  })
+
+  it('installs into local core.hooksPath when configured', () => {
+    const root = tempGitRepo()
+    execFileSync('git', ['config', '--local', 'core.hooksPath', '.githooks'], { cwd: root, stdio: 'ignore' })
+
+    configureGuard(root)
+
+    const hooksDir = path.join(root, '.githooks')
+    expect(fs.existsSync(path.join(hooksDir, 'agent-eyes-guard.mjs'))).toBe(true)
+    expect(fs.existsSync(path.join(hooksDir, 'pre-commit'))).toBe(true)
+  })
+
+  it('shell-quotes guard path in pre-commit hook', () => {
+    const root = tempGitRepoWithName("repo $name `tick` 'quote'")
+
+    configureGuard(root)
+
+    const guardFile = path.join(root, '.git', 'hooks', 'agent-eyes-guard.mjs')
+    const preCommit = fs.readFileSync(path.join(root, '.git', 'hooks', 'pre-commit'), 'utf8')
+
+    expect(preCommit).toContain(`node '${guardFile.replace(/'/g, "'\\''")}' || exit 1`)
+    expect(preCommit).not.toContain(`node "${guardFile}" || exit 1`)
   })
 
   it('does not overwrite an existing user-owned pre-commit hook', () => {
     const root = tempGitRepo()
     const preCommitFile = path.join(root, '.git', 'hooks', 'pre-commit')
+    const guardFile = path.join(root, '.git', 'hooks', 'agent-eyes-guard.mjs')
     const userHook = '#!/usr/bin/env sh\necho user-owned\n'
     fs.writeFileSync(preCommitFile, userHook)
 
     configureGuard(root)
 
     expect(fs.readFileSync(preCommitFile, 'utf8')).toBe(userHook)
+    expect(fs.existsSync(guardFile)).toBe(false)
   })
 })
 
