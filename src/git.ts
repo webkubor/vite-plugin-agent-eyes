@@ -1,7 +1,7 @@
 import type { Plugin } from 'vite'
 import fs from 'node:fs'
 import path from 'node:path'
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { createGuardHookScript, type AgentGuardOptions } from './guard'
 
 /**
@@ -76,6 +76,15 @@ function sh(cmd: string, cwd: string): string {
   }
 }
 
+function setLocalHooksPath(cwd: string, hooksPath: string): boolean {
+  try {
+    execFileSync('git', ['config', '--local', 'core.hooksPath', hooksPath], { cwd, stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
+
 interface GitHooks {
   /** 本插件要写入的目录：本地 core.hooksPath 或本仓库 <gitCommonDir>/hooks（绝不用全局，避免污染所有仓库） */
   repoHooks: string
@@ -141,7 +150,7 @@ function postCommitScript(notifyFile: string): string {
   return `#!/usr/bin/env sh
 ${MARK_BEGIN}
 # 提交成功后后台静默推送 webhook（绝不阻断提交）
-node "${notifyFile}" >/dev/null 2>&1 &
+node ${shellQuote(notifyFile)} >/dev/null 2>&1 &
 ${MARK_END}
 `
 }
@@ -250,8 +259,12 @@ export function agentGit(options: AgentGitOptions = {}): Plugin {
       // 全局 hooksPath（如 lefthook）遮蔽本仓库钩子：写进去也不会被 git 调用
       if (hooks.shadowed) {
         if (options.claimHooksPath) {
-          sh(`git config --local core.hooksPath ${JSON.stringify(path.relative(root, hooks.repoHooks))}`, root)
-          log(`已为本仓库设 local core.hooksPath → ${path.relative(root, hooks.repoHooks)}（覆盖全局 ${hooks.effDir}）`)
+          const relativeHooksPath = path.relative(root, hooks.repoHooks)
+          if (!setLocalHooksPath(root, relativeHooksPath)) {
+            warn(`无法设置本仓库 core.hooksPath：${relativeHooksPath}`)
+            return
+          }
+          log(`已为本仓库设 local core.hooksPath → ${relativeHooksPath}（覆盖全局 ${hooks.effDir}）`)
         } else {
           warn(
             `检测到全局 core.hooksPath（${hooks.effDir}）正在生效，本仓库钩子不会被 git 调用。\n` +
