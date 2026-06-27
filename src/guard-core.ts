@@ -159,6 +159,10 @@ function hasTypeAny(text: string): boolean {
   )
 }
 
+function isNewFileHeader(rawLine: string): boolean {
+  return rawLine.startsWith('+++ b/') || rawLine === '+++ /dev/null'
+}
+
 function parseAddedLines(diff: string): AddedLine[] {
   const addedLines: AddedLine[] = []
   let nextLine: number | undefined
@@ -166,7 +170,7 @@ function parseAddedLines(diff: string): AddedLine[] {
     const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(rawLine)
     if (hunk) {
       nextLine = Number(hunk[1])
-    } else if (nextLine !== undefined && rawLine.startsWith('+') && !rawLine.startsWith('+++')) {
+    } else if (nextLine !== undefined && rawLine.startsWith('+') && !isNewFileHeader(rawLine)) {
       addedLines.push({ line: nextLine, text: rawLine.slice(1) })
       nextLine += 1
     } else if (nextLine !== undefined && (!rawLine.startsWith('-') || rawLine.startsWith('---'))) {

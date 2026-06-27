@@ -179,6 +179,40 @@ describe('generated guard hook script', () => {
     expect(report.items[0]?.file).toBe(fileName)
   })
 
+  it('keeps added content lines that start with plus signs', () => {
+    const dir = makeRepo()
+    fs.writeFileSync(path.join(dir, 'src.ts'), ['const value = 1', '++TODO check'].join('\n'))
+    git(dir, ['add', 'src.ts'])
+
+    const result = runGuard({ checks: ['todo'] }, dir)
+
+    expect(result.summary.warn).toBe(1)
+    expect(result.items[0]).toMatchObject({
+      check: 'todo',
+      file: 'src.ts',
+      line: 2,
+      message: '新增 TODO/FIXME/HACK',
+    })
+  })
+
+  it('keeps plus-starting added content lines in the generated hook', () => {
+    const dir = makeRepo()
+    fs.writeFileSync(path.join(dir, 'src.ts'), ['const value = 1', '++TODO check'].join('\n'))
+    git(dir, ['add', 'src.ts'])
+
+    const scriptFile = path.join(dir, '.git', 'hooks', 'agent-eyes-guard.mjs')
+    fs.mkdirSync(path.dirname(scriptFile), { recursive: true })
+    fs.writeFileSync(scriptFile, createGuardHookScript({ checks: ['todo'] }))
+
+    const output = execFileSync(process.execPath, [scriptFile], { cwd: dir, encoding: 'utf8' })
+    const report = JSON.parse(fs.readFileSync(path.join(dir, 'log', 'guard-report.json'), 'utf8')) as {
+      items: Array<{ check?: string; line?: number }>
+    }
+
+    expect(output).toContain('新增 TODO/FIXME/HACK')
+    expect(report.items[0]).toMatchObject({ check: 'todo', line: 2 })
+  })
+
   it('preserves narrowed noAny behavior in the generated script', () => {
     const dir = makeRepo()
     fs.writeFileSync(
