@@ -2,6 +2,27 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.8.0] - 2026-06-27
+
+### Added
+- **`agentGuard()` 提交前风险门禁**：新增独立 Vite 插件，在 dev 启动时安装本仓库 `pre-commit`，只检查 staged files，帮助人在提交前提前发现 secrets、超大文件、超长文件、TODO/FIXME/HACK、TypeScript `any` 和 `console.log`。
+- **`agentGit({ guard })` 集成**：`agentGit` 可复用同一套 guard，执行顺序固定为 guard → 用户自定义 `precommit` 命令 → 提交成功后的 webhook。
+- **agent 可读 guard 报告**：每次 guard 运行会写入 `log/guard-report.json`，包含 `level`、`passed`、`summary` 和明细项；报告写入失败只提示，不影响检查结论。
+- **guard 测试基座**：新增 Vitest、`typecheck`、`build:tmp`，覆盖 staged-only、hook 安装、diff 解析、配置开关、hook ownership 和 agentGit 集成边界。
+
+### Changed
+- `package.json` 版本升至 `0.8.0`，README/SKILL 更新为 guard 和 `log/<port>/` 当前口径。
+
+### Safety
+- `agentGuard()` 和 `agentGit({ guard })` 默认只接管带 `agent-eyes managed` 标记的 hook；遇到用户自有 `pre-commit` / `post-commit` 默认跳过，不写 sidecar 脚本。
+- `core.hooksPath` 被全局工具遮蔽时默认告警并跳过；只有显式 `agentGit({ claimHooksPath: true })` 才写本仓库 local config。
+
+## [0.7.0] - 2026-06-24
+
+### Added
+- **多 webhook 推送**：`agentGit.webhook` 支持数组，可同时推送飞书、钉钉、企业微信或自定义平台。
+- **提交信息增强**：默认 webhook payload 增加分支名称和 UTC 提交时间。
+
 ## [0.6.0] - 2026-06-24
 
 ### Added
@@ -88,7 +109,9 @@
 - 三类结构化日志：`api-calls.log` / `errors.log` / `proxy.log`
 - 招牌功能：本地 http 上游 `Set-Cookie` 改写（去 `Domain` / 剥 `Secure` / `SameSite=None → Lax`），解决「登录成功却一直 401」
 
-[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.8.0
+[0.7.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.7.0
 [0.6.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.6.0
 [0.5.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.5.0
 [0.4.1]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.4.1
