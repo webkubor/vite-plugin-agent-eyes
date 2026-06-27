@@ -307,10 +307,10 @@ export function agentGit(options: AgentGitOptions = {}): Plugin {
       if (hasWebhook) {
         const notifyFile = path.join(hooksDir, 'agent-eyes-notify.mjs')
         const file = path.join(hooksDir, 'post-commit')
-        const wroteNotify = writeIfChanged(notifyFile, notifyScript(webhook!, projectLabel))
         if (!force && !isManageable(file)) {
           warn(`已存在非本插件管理的 post-commit，跳过（如需接管请设 force:true 或手动合并）`)
         } else {
+          const wroteNotify = writeIfChanged(notifyFile, notifyScript(webhook!, projectLabel))
           const wroteHook = writeIfChanged(file, postCommitScript(notifyFile))
           if (wroteHook) fs.chmodSync(file, 0o755)
           if (wroteHook || wroteNotify) installed.push('post-commit(webhook)')

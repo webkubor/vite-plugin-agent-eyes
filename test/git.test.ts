@@ -172,6 +172,22 @@ describe('agentGit guard integration', () => {
     expect(fs.existsSync(guardFile)).toBe(false)
   })
 
+  it('preserves user-owned post-commit and does not write notify script', () => {
+    const root = makeRepo()
+    const hooksDir = path.join(root, '.git', 'hooks')
+    const postCommitFile = path.join(hooksDir, 'post-commit')
+    const notifyFile = path.join(hooksDir, 'agent-eyes-notify.mjs')
+    const userHook = '#!/usr/bin/env sh\necho user hook\n'
+    const warnings: string[] = []
+    fs.writeFileSync(postCommitFile, userHook)
+
+    configureGit(root, { webhook: { url: 'https://example.com/hook' } }, warnings)
+
+    expect(fs.readFileSync(postCommitFile, 'utf8')).toBe(userHook)
+    expect(fs.existsSync(notifyFile)).toBe(false)
+    expect(warnings.some((warning) => warning.includes('post-commit'))).toBe(true)
+  })
+
   it('force:true overwrites a user-owned pre-commit for guard and custom commands', () => {
     const root = makeRepo()
     const hooksDir = path.join(root, '.git', 'hooks')
