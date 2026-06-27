@@ -45,7 +45,7 @@ logApiCall({ method, path, url, ok, duration_ms, code, status, request_id, error
 logConsoleEntry('warn', ['deprecated API called'])
 ```
 
-未装包但想临时用：把 `src/index.ts` / `src/client.ts` 拷进项目 `scripts/` 直接引。
+未装包但想临时用：优先用 git / workspace 方式安装本包；不要只拷 `src/index.ts` / `src/client.ts`，它们依赖同目录下的 `cdp`、`git`、`guard-*` 等模块。
 
 ## 提交前 guard（0.8.0+）
 

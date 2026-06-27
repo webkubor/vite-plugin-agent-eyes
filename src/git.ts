@@ -11,7 +11,7 @@ import { createGuardHookScript, type AgentGuardOptions } from './guard'
  * 装上插件、跑一次 `vite dev`，钩子即就位，无需各项目再配 husky/.git/hooks。
  *
  * 安全取向：
- *  - 仅在传了 precommit / webhook 时才安装（否则 no-op）。
+ *  - 仅在传了 guard / precommit / webhook 时才安装（否则 no-op）。
  *  - 只接管带 `agent-eyes managed` 标记的钩子；遇到用户已有的、非本插件写的钩子默认不覆盖（force 可强制）。
  *  - 钩子内容自包含（不依赖运行中的 dev server），git commit 时独立执行。
  */

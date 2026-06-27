@@ -4,7 +4,7 @@
  * API：无；仅提供 guard 公共类型和默认阈值。
  */
 
-/** guard 运行等级。warn 只报告，block 阻断红线，strict 预留给更严格阻断。 */
+/** guard 运行等级。warn 只报告，block 阻断红线；strict 当前等同 block，预留给更严格阻断。 */
 export type AgentGuardLevel = 'warn' | 'block' | 'strict'
 
 /** 单个检查项最终严重度。 */
