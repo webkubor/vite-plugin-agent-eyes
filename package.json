@@ -34,7 +34,9 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "SKILL.md"
   ],
   "scripts": {
     "build": "tsup src/index.ts src/client.ts --format esm --dts --clean",

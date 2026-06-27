@@ -48,6 +48,29 @@ describe('generated guard hook script', () => {
     expect(fs.existsSync(path.join(dir, 'log', 'guard-report.json'))).toBe(true)
   })
 
+  it('blocks hyphenated provider keys from the generated hook', () => {
+    const dir = makeRepo()
+    fs.mkdirSync(path.join(dir, '.git', 'hooks'), { recursive: true })
+    fs.writeFileSync(path.join(dir, 'src.ts'), 'const openaiKey = "sk-proj-abcdefghijklmnopqrstuvwxyz"\n')
+    git(dir, ['add', 'src.ts'])
+
+    const scriptFile = path.join(dir, '.git', 'hooks', 'agent-eyes-guard.mjs')
+    fs.writeFileSync(scriptFile, createGuardHookScript({ checks: ['secrets'] }))
+
+    let failed = false
+    try {
+      execFileSync(process.execPath, [scriptFile], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    } catch {
+      failed = true
+    }
+
+    expect(failed).toBe(true)
+    const report = JSON.parse(fs.readFileSync(path.join(dir, 'log', 'guard-report.json'), 'utf8')) as {
+      items: Array<{ check: string }>
+    }
+    expect(report.items.map((item) => item.check)).toEqual(['secrets'])
+  })
+
   it('allows staged warnings in warn mode', () => {
     const dir = makeRepo()
     fs.writeFileSync(path.join(dir, 'src.ts'), 'console.log("debug")\n')

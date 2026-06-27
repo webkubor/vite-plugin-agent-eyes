@@ -18,7 +18,7 @@ const DEFAULT_FILE_LENGTH_BLOCK = 800;
 const SECRET_PATTERNS = [
   /-----BEGIN (?:RSA |EC |OPENSSH |)?PRIVATE KEY-----/,
   /\b(?:token|secret|api[_-]?key|access[_-]?token|refresh[_-]?token)\b\s*[:=]\s*['"][^'"]{12,}['"]/i,
-  /\bsk_(?:live|test|proj)_[a-z0-9_-]{12,}/i,
+  /\bsk[-_](?:live|test|proj)[-_][a-z0-9_-]{12,}/i,
   /https:\/\/(?:open\.feishu\.cn|oapi\.dingtalk\.com|qyapi\.weixin\.qq\.com)\/[^\s'"]+/i,
 ];
 const GIT_DIFF_ARGS = ['diff', '--cached', '--unified=0', '--no-ext-diff'];

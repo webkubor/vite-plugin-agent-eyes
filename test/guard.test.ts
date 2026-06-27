@@ -188,6 +188,19 @@ describe('runTextChecks', () => {
     expect(items.find((item) => item.check === 'todo')?.severity).toBe('warn')
   })
 
+  it('detects hyphenated provider key shapes', () => {
+    const items = runTextChecks(
+      stagedFile({
+        content: 'const openaiKey = "sk-proj-abcdefghijklmnopqrstuvwxyz"\n',
+        addedLines: [{ line: 1, text: 'const openaiKey = "sk-proj-abcdefghijklmnopqrstuvwxyz"' }],
+      }),
+      normalizeGuardConfig({ checks: ['secrets'] }),
+    )
+
+    expect(items.map((item) => item.check)).toEqual(['secrets'])
+    expect(items[0]?.severity).toBe('block')
+  })
+
   it('skips checks disabled by array or object config', () => {
     const onlySecrets = runTextChecks(
       stagedFile({
