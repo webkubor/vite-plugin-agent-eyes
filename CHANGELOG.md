@@ -109,9 +109,9 @@
 - 三类结构化日志：`api-calls.log` / `errors.log` / `proxy.log`
 - 招牌功能：本地 http 上游 `Set-Cookie` 改写（去 `Domain` / 剥 `Secure` / `SameSite=None → Lax`），解决「登录成功却一直 401」
 
-[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.8.0...HEAD
-[0.8.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.8.0
-[0.7.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.7.0
+[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.6.0...HEAD
+[0.8.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.6.0...HEAD
+[0.7.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.6.0...HEAD
 [0.6.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.6.0
 [0.5.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.5.0
 [0.4.1]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.4.1

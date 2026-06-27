@@ -117,7 +117,7 @@ agentGit({
 - 钩子内容**自包含**，`git commit` 时独立运行，不依赖 dev server 在跑。
 - 只接管带 `agent-eyes managed` 标记的钩子；遇到你已有的、非本插件写的钩子默认**不覆盖**（`force: true` 强制）。
 - 自定义通知：`webhook.format` 传 `(info: CommitInfo) => payload`（纯函数，会序列化进钩子脚本），`info` 含 `project / repo / author / branch / message / hash / timestamp`。
-- 仅 dev 期安装钩子（`apply: 'serve'`）；不传 `precommit`/`webhook` 时为 no-op。
+- 仅 dev 期安装钩子（`apply: 'serve'`）；不传 `guard` / `precommit` / `webhook` 时为 no-op。
 - 多 webhook 时逐个推送，单个失败不影响其他。
 
 ### 1.6 Human Guard：提交前风险门禁（0.8.0+，可选）
@@ -163,7 +163,7 @@ agentGit({
 |------|----------|----------|
 | `warn` | 所有检查只报告，不阻断 | 老项目接入、先观察噪声 |
 | `block` | secrets / largeFiles 等红线阻断，质量信号警告 | 默认推荐 |
-| `strict` | 预留给更激进的团队门禁 | 新项目、核心仓库、发布前 |
+| `strict` | 当前等同 `block`，预留给后续更激进的团队门禁 | 新项目、核心仓库、发布前 |
 
 默认检查项：
 

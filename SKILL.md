@@ -71,7 +71,7 @@ agentGit({
 
 - `warn`：只报告，不阻断。
 - `block`：默认推荐，secrets / largeFiles 等红线阻断，屎山信号警告。
-- `strict`：预留给更严格门禁。
+- `strict`：当前等同 `block`，预留给后续更严格门禁。
 - guard 只检查 staged files；不要把未暂存文件当成 guard 结论来源。
 - 最近一次 JSON 报告在 `log/guard-report.json`。
 
