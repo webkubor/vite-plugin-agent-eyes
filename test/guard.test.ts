@@ -1,5 +1,10 @@
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import type { ViteDevServer } from 'vite'
 import { describe, expect, it } from 'vitest'
-import { normalizeGuardConfig, runTextChecks, type StagedFile } from '../src/guard'
+import { agentGuard, normalizeGuardConfig, runTextChecks, type StagedFile } from '../src/guard'
 
 type GuardResultItem = {
   check: string
@@ -13,6 +18,31 @@ function stagedFile(file: Partial<StagedFile> = {}): StagedFile {
     addedLines: file.addedLines ?? [],
     bytes: file.bytes ?? 0,
   }
+}
+
+function tempGitRepo(): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-guard-'))
+  execFileSync('git', ['init'], { cwd: root, stdio: 'ignore' })
+  execFileSync('git', ['config', '--local', 'core.hooksPath', '.git/hooks'], { cwd: root, stdio: 'ignore' })
+  return root
+}
+
+function fakeServer(root: string): ViteDevServer {
+  return {
+    config: {
+      root,
+      logger: {
+        info() {},
+        warn() {},
+      },
+    },
+  } as unknown as ViteDevServer
+}
+
+function configureGuard(root: string): void {
+  const plugin = agentGuard({ level: 'warn' })
+  if (typeof plugin.configureServer !== 'function') throw new Error('configureServer is not a function')
+  plugin.configureServer(fakeServer(root))
 }
 
 describe('normalizeGuardConfig', () => {
@@ -55,6 +85,43 @@ describe('normalizeGuardConfig', () => {
     expect(config.checks.fileLength.enabled).toBe(true)
     expect(config.checks.todo.enabled).toBe(true)
     expect(config.checks.noConsoleLog.enabled).toBe(true)
+  })
+})
+
+describe('agentGuard Vite plugin', () => {
+  it('returns a serve-only Vite plugin with install hook', () => {
+    const plugin = agentGuard({ level: 'warn' })
+
+    expect(plugin.name).toBe('vite-plugin-agent-eyes-guard')
+    expect(plugin.apply).toBe('serve')
+    expect(typeof plugin.configureServer).toBe('function')
+  })
+
+  it('installs guard script and managed pre-commit hook in a git repo', () => {
+    const root = tempGitRepo()
+
+    configureGuard(root)
+
+    const hooksDir = path.join(root, '.git', 'hooks')
+    const guardFile = path.join(hooksDir, 'agent-eyes-guard.mjs')
+    const preCommitFile = path.join(hooksDir, 'pre-commit')
+    const preCommit = fs.readFileSync(preCommitFile, 'utf8')
+
+    expect(fs.existsSync(guardFile)).toBe(true)
+    expect(preCommit).toContain('agent-eyes managed')
+    expect(preCommit).toContain(`node "${guardFile}" || exit 1`)
+    expect(fs.statSync(preCommitFile).mode & 0o111).toBeGreaterThan(0)
+  })
+
+  it('does not overwrite an existing user-owned pre-commit hook', () => {
+    const root = tempGitRepo()
+    const preCommitFile = path.join(root, '.git', 'hooks', 'pre-commit')
+    const userHook = '#!/usr/bin/env sh\necho user-owned\n'
+    fs.writeFileSync(preCommitFile, userHook)
+
+    configureGuard(root)
+
+    expect(fs.readFileSync(preCommitFile, 'utf8')).toBe(userHook)
   })
 })
 

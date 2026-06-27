@@ -7,3 +7,4 @@
 export * from './guard-types'
 export * from './guard-core'
 export * from './guard-hook'
+export * from './guard-plugin'
