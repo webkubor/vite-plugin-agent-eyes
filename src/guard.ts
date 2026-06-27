@@ -55,6 +55,8 @@ export interface AgentGuardOptions {
 
 /** 标准化后的普通检查配置。 */
 export interface NormalizedGuardCheck {
+  /** 是否启用该检查。 */
+  enabled: boolean
   /** 该检查命中时的最终严重度。 */
   severity: GuardSeverity
 }
@@ -170,6 +172,24 @@ function switchValue<Key extends keyof AgentGuardChecks>(checks: AgentGuardOptio
   return typeof value === 'object' ? undefined : value
 }
 
+function enabledFor(checks: AgentGuardOptions['checks'], key: keyof AgentGuardChecks): boolean {
+  if (!checks) return true
+  if (Array.isArray(checks)) return checks.includes(key)
+  return checks[key] !== false
+}
+
+function normalizedSwitch(
+  level: AgentGuardLevel,
+  checks: AgentGuardOptions['checks'],
+  key: keyof AgentGuardChecks,
+  fallback: GuardSeverity,
+): NormalizedGuardCheck {
+  return {
+    enabled: enabledFor(checks, key),
+    severity: severityFor(level, switchValue(checks, key), fallback),
+  }
+}
+
 /** 标准化 guard 配置，集中处理默认值和 warn/block 降级。 */
 export function normalizeGuardConfig(options: AgentGuardOptions = {}): NormalizedGuardConfig {
   const level = options.level ?? 'block'
@@ -181,19 +201,21 @@ export function normalizeGuardConfig(options: AgentGuardOptions = {}): Normalize
     level,
     reportFile: options.reportFile ?? DEFAULT_REPORT_FILE,
     checks: {
-      secrets: { severity: severityFor(level, switchValue(checks, 'secrets'), 'block') },
+      secrets: normalizedSwitch(level, checks, 'secrets', 'block'),
       largeFiles: {
+        enabled: enabledFor(checks, 'largeFiles'),
         severity: severityFor(level, switchValue(checks, 'largeFiles'), 'block'),
         blockBytes: largeFiles.blockBytes ?? DEFAULT_LARGE_FILE_BLOCK_BYTES,
       },
       fileLength: {
+        enabled: enabledFor(checks, 'fileLength'),
         severity: severityFor(level, switchValue(checks, 'fileLength'), 'warn'),
         warn: fileLength.warn ?? DEFAULT_FILE_LENGTH_WARN,
         block: fileLength.block ?? DEFAULT_FILE_LENGTH_BLOCK,
       },
-      todo: { severity: severityFor(level, switchValue(checks, 'todo'), 'warn') },
-      noAny: { severity: severityFor(level, switchValue(checks, 'noAny'), 'warn') },
-      noConsoleLog: { severity: severityFor(level, switchValue(checks, 'noConsoleLog'), 'warn') },
+      todo: normalizedSwitch(level, checks, 'todo', 'warn'),
+      noAny: normalizedSwitch(level, checks, 'noAny', 'warn'),
+      noConsoleLog: normalizedSwitch(level, checks, 'noConsoleLog', 'warn'),
     },
   }
 }
@@ -207,7 +229,9 @@ function isConsoleLogFile(path: string): boolean {
 }
 
 function lineCount(content: string): number {
-  return content ? content.split(/\r?\n/).length : 0
+  if (!content) return 0
+  const withoutFinalNewline = content.replace(/\r?\n$/, '')
+  return withoutFinalNewline ? withoutFinalNewline.split(/\r?\n/).length : 0
 }
 
 function secretLineKeys(addedLines: AddedLine[]): Set<number> {
@@ -230,11 +254,28 @@ function addedLineItem(
   return { check, severity, file: file.path, line: added.line, message }
 }
 
+function stripCommentAndStringText(text: string): string {
+  return text
+    .replace(/(['"`])(?:\\.|(?!\1).)*\1/g, '')
+    .replace(/\/\*.*?\*\//g, '')
+    .split('//')[0] ?? ''
+}
+
+function hasTypeAny(text: string): boolean {
+  const code = stripCommentAndStringText(text)
+  return (
+    /:\s*any\b/.test(code) ||
+    /\bas\s+any\b/.test(code) ||
+    /<\s*any\s*>/.test(code) ||
+    /<[^>\n]*\bany\b[^>\n]*>/.test(code)
+  )
+}
+
 /** 对 staged 文件内容和新增行执行轻量文本检查。 */
 export function runTextChecks(file: StagedFile, config: NormalizedGuardConfig): GuardReportItem[] {
   const items: GuardReportItem[] = []
 
-  if (file.bytes > config.checks.largeFiles.blockBytes) {
+  if (config.checks.largeFiles.enabled && file.bytes > config.checks.largeFiles.blockBytes) {
     items.push({
       check: 'largeFiles',
       severity: config.checks.largeFiles.severity,
@@ -244,14 +285,14 @@ export function runTextChecks(file: StagedFile, config: NormalizedGuardConfig): 
   }
 
   const lines = lineCount(file.content)
-  if (lines >= config.checks.fileLength.block) {
+  if (config.checks.fileLength.enabled && lines >= config.checks.fileLength.block) {
     items.push({
       check: 'fileLength',
       severity: config.level === 'warn' ? 'warn' : 'block',
       file: file.path,
       message: `${lines} lines exceeds block threshold ${config.checks.fileLength.block}`,
     })
-  } else if (lines >= config.checks.fileLength.warn) {
+  } else if (config.checks.fileLength.enabled && lines >= config.checks.fileLength.warn) {
     items.push({
       check: 'fileLength',
       severity: config.checks.fileLength.severity,
@@ -260,28 +301,32 @@ export function runTextChecks(file: StagedFile, config: NormalizedGuardConfig): 
     })
   }
 
-  const secretLines = secretLineKeys(file.addedLines)
-  for (const added of file.addedLines) {
-    if (secretLines.has(added.line)) {
-      items.push(addedLineItem('secrets', config.checks.secrets.severity, file, added, '疑似 hardcoded secret/token/webhook'))
-    }
-  }
-
-  for (const added of file.addedLines) {
-    if (!secretLines.has(added.line) && /\b(?:TODO|FIXME|HACK)\b/.test(added.text)) {
-      items.push(addedLineItem('todo', config.checks.todo.severity, file, added, '新增 TODO/FIXME/HACK'))
-    }
-  }
-
-  if (isTypeScriptFile(file.path)) {
+  const secretLines = config.checks.secrets.enabled ? secretLineKeys(file.addedLines) : new Set<number>()
+  if (config.checks.secrets.enabled) {
     for (const added of file.addedLines) {
-      if (!secretLines.has(added.line) && /\bany\b/.test(added.text)) {
+      if (secretLines.has(added.line)) {
+        items.push(addedLineItem('secrets', config.checks.secrets.severity, file, added, '疑似 hardcoded secret/token/webhook'))
+      }
+    }
+  }
+
+  if (config.checks.todo.enabled) {
+    for (const added of file.addedLines) {
+      if (!secretLines.has(added.line) && /\b(?:TODO|FIXME|HACK)\b/.test(added.text)) {
+        items.push(addedLineItem('todo', config.checks.todo.severity, file, added, '新增 TODO/FIXME/HACK'))
+      }
+    }
+  }
+
+  if (config.checks.noAny.enabled && isTypeScriptFile(file.path)) {
+    for (const added of file.addedLines) {
+      if (!secretLines.has(added.line) && hasTypeAny(added.text)) {
         items.push(addedLineItem('noAny', config.checks.noAny.severity, file, added, '新增 TypeScript any'))
       }
     }
   }
 
-  if (isConsoleLogFile(file.path)) {
+  if (config.checks.noConsoleLog.enabled && isConsoleLogFile(file.path)) {
     for (const added of file.addedLines) {
       if (!secretLines.has(added.line) && /\bconsole\.log\s*\(/.test(added.text)) {
         items.push(addedLineItem('noConsoleLog', config.checks.noConsoleLog.severity, file, added, '新增 console.log'))

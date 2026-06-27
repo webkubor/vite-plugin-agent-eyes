@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeGuardConfig, runTextChecks } from '../src/guard'
+import { normalizeGuardConfig, runTextChecks, type StagedFile } from '../src/guard'
 
 type GuardResultItem = {
   check: string
   severity: string
+}
+
+function stagedFile(file: Partial<StagedFile> = {}): StagedFile {
+  return {
+    path: file.path ?? 'src/example.ts',
+    content: file.content ?? '',
+    addedLines: file.addedLines ?? [],
+    bytes: file.bytes ?? 0,
+  }
 }
 
 describe('normalizeGuardConfig', () => {
@@ -11,12 +20,12 @@ describe('normalizeGuardConfig', () => {
     const config = normalizeGuardConfig()
 
     expect(config.level).toBe('block')
-    expect(config.checks.secrets).toEqual({ severity: 'block' })
-    expect(config.checks.largeFiles).toEqual({ severity: 'block', blockBytes: 1024 * 1024 })
-    expect(config.checks.fileLength).toEqual({ severity: 'warn', warn: 400, block: 800 })
-    expect(config.checks.todo).toEqual({ severity: 'warn' })
-    expect(config.checks.noAny).toEqual({ severity: 'warn' })
-    expect(config.checks.noConsoleLog).toEqual({ severity: 'warn' })
+    expect(config.checks.secrets).toEqual({ enabled: true, severity: 'block' })
+    expect(config.checks.largeFiles).toEqual({ enabled: true, severity: 'block', blockBytes: 1024 * 1024 })
+    expect(config.checks.fileLength).toEqual({ enabled: true, severity: 'warn', warn: 400, block: 800 })
+    expect(config.checks.todo).toEqual({ enabled: true, severity: 'warn' })
+    expect(config.checks.noAny).toEqual({ enabled: true, severity: 'warn' })
+    expect(config.checks.noConsoleLog).toEqual({ enabled: true, severity: 'warn' })
   })
 
   it('downgrades every built-in check to warn in warn mode', () => {
@@ -24,6 +33,28 @@ describe('normalizeGuardConfig', () => {
 
     expect(config.checks.secrets.severity).toBe('warn')
     expect(config.checks.largeFiles.severity).toBe('warn')
+  })
+
+  it('enables only listed checks in array style config', () => {
+    const config = normalizeGuardConfig({ checks: ['secrets'] })
+
+    expect(config.checks.secrets.enabled).toBe(true)
+    expect(config.checks.largeFiles.enabled).toBe(false)
+    expect(config.checks.fileLength.enabled).toBe(false)
+    expect(config.checks.todo.enabled).toBe(false)
+    expect(config.checks.noAny.enabled).toBe(false)
+    expect(config.checks.noConsoleLog.enabled).toBe(false)
+  })
+
+  it('disables object false checks while leaving other defaults enabled', () => {
+    const config = normalizeGuardConfig({ checks: { noAny: false } })
+
+    expect(config.checks.noAny.enabled).toBe(false)
+    expect(config.checks.secrets.enabled).toBe(true)
+    expect(config.checks.largeFiles.enabled).toBe(true)
+    expect(config.checks.fileLength.enabled).toBe(true)
+    expect(config.checks.todo.enabled).toBe(true)
+    expect(config.checks.noConsoleLog.enabled).toBe(true)
   })
 })
 
@@ -53,5 +84,92 @@ describe('runTextChecks', () => {
     expect(items.map((item) => item.check)).toEqual(['secrets', 'todo', 'noAny', 'noConsoleLog'])
     expect(items.find((item) => item.check === 'secrets')?.severity).toBe('block')
     expect(items.find((item) => item.check === 'todo')?.severity).toBe('warn')
+  })
+
+  it('skips checks disabled by array or object config', () => {
+    const onlySecrets = runTextChecks(
+      stagedFile({
+        content: ['const token = "sk_live_1234567890abcdef"', 'const value: any = {}'].join('\n'),
+        addedLines: [
+          { line: 1, text: 'const token = "sk_live_1234567890abcdef"' },
+          { line: 2, text: 'const value: any = {}' },
+        ],
+      }),
+      normalizeGuardConfig({ checks: ['secrets'] }),
+    )
+    const withoutNoAny = runTextChecks(
+      stagedFile({
+        content: 'const value: any = {}',
+        addedLines: [{ line: 1, text: 'const value: any = {}' }],
+      }),
+      normalizeGuardConfig({ checks: { noAny: false } }),
+    )
+
+    expect(onlySecrets.map((item) => item.check)).toEqual(['secrets'])
+    expect(withoutNoAny.map((item) => item.check)).not.toContain('noAny')
+  })
+
+  it('uses logical line counts for fileLength thresholds', () => {
+    const config = normalizeGuardConfig({ checks: { fileLength: { warn: 3, block: 5 } } })
+    const twoLinesWithTrailingNewline = runTextChecks(
+      stagedFile({ content: 'one\ntwo\n' }),
+      config,
+    )
+    const threeLinesWithTrailingNewline = runTextChecks(
+      stagedFile({ content: 'one\ntwo\nthree\n' }),
+      config,
+    )
+    const fiveLinesWithTrailingNewline = runTextChecks(
+      stagedFile({ content: 'one\ntwo\nthree\nfour\nfive\n' }),
+      config,
+    )
+
+    expect(twoLinesWithTrailingNewline.some((item) => item.check === 'fileLength')).toBe(false)
+    expect(threeLinesWithTrailingNewline.find((item) => item.check === 'fileLength')?.severity).toBe('warn')
+    expect(fiveLinesWithTrailingNewline.find((item) => item.check === 'fileLength')?.severity).toBe('block')
+  })
+
+  it('does not flag noAny in comments or string prose', () => {
+    const items = runTextChecks(
+      stagedFile({
+        addedLines: [
+          { line: 1, text: '// const value: any = {}' },
+          { line: 2, text: 'const label = "Array<any>"' },
+          { line: 3, text: 'const note = "accept any value"' },
+          { line: 4, text: 'const value: any = {}' },
+        ],
+      }),
+      normalizeGuardConfig(),
+    )
+
+    expect(items.filter((item) => item.check === 'noAny')).toHaveLength(1)
+    expect(items.find((item) => item.check === 'noAny')?.line).toBe(4)
+  })
+
+  it('only flags console.log in script-like files', () => {
+    const config = normalizeGuardConfig()
+    const paths = ['src/a.ts', 'src/a.js', 'src/a.vue', 'src/a.svelte', 'README.md', 'notes.txt']
+    const results = paths.map((path) => ({
+      path,
+      checks: runTextChecks(
+        stagedFile({
+          path,
+          content: 'console.log(value)',
+          addedLines: [{ line: 1, text: 'console.log(value)' }],
+        }),
+        config,
+      ).map((item) => item.check),
+    }))
+
+    expect(results.filter((result) => result.checks.includes('noConsoleLog')).map((result) => result.path)).toEqual([
+      'src/a.ts',
+      'src/a.js',
+      'src/a.vue',
+      'src/a.svelte',
+    ])
+    expect(results.filter((result) => !result.checks.includes('noConsoleLog')).map((result) => result.path)).toEqual([
+      'README.md',
+      'notes.txt',
+    ])
   })
 })
