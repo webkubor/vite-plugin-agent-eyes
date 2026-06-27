@@ -213,6 +213,43 @@ describe('generated guard hook script', () => {
     expect(report.items[0]).toMatchObject({ check: 'todo', line: 2 })
   })
 
+  it('keeps in-hunk content that looks like a new-file header', () => {
+    const dir = makeRepo()
+    fs.writeFileSync(path.join(dir, 'src.ts'), ['++ b/not-a-header', '// TODO after header-like line'].join('\n'))
+    git(dir, ['add', 'src.ts'])
+
+    const result = runGuard({ checks: ['todo'] }, dir)
+
+    expect(result.summary.warn).toBe(1)
+    expect(result.items[0]).toMatchObject({
+      check: 'todo',
+      file: 'src.ts',
+      line: 2,
+    })
+    expect(collectStagedFiles(dir)[0]?.addedLines).toEqual([
+      { line: 1, text: '++ b/not-a-header' },
+      { line: 2, text: '// TODO after header-like line' },
+    ])
+  })
+
+  it('keeps in-hunk header-like content in the generated hook', () => {
+    const dir = makeRepo()
+    fs.writeFileSync(path.join(dir, 'src.ts'), ['++ b/not-a-header', '// TODO after header-like line'].join('\n'))
+    git(dir, ['add', 'src.ts'])
+
+    const scriptFile = path.join(dir, '.git', 'hooks', 'agent-eyes-guard.mjs')
+    fs.mkdirSync(path.dirname(scriptFile), { recursive: true })
+    fs.writeFileSync(scriptFile, createGuardHookScript({ checks: ['todo'] }))
+
+    const output = execFileSync(process.execPath, [scriptFile], { cwd: dir, encoding: 'utf8' })
+    const report = JSON.parse(fs.readFileSync(path.join(dir, 'log', 'guard-report.json'), 'utf8')) as {
+      items: Array<{ check?: string; line?: number }>
+    }
+
+    expect(output).toContain('新增 TODO/FIXME/HACK')
+    expect(report.items[0]).toMatchObject({ check: 'todo', line: 2 })
+  })
+
   it('preserves narrowed noAny behavior in the generated script', () => {
     const dir = makeRepo()
     fs.writeFileSync(

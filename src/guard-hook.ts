@@ -82,17 +82,13 @@ function gitBuffer(cwd, args) {
   return execFileSync('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
-function isNewFileHeader(rawLine) {
-  return rawLine.startsWith('+++ b/') || rawLine === '+++ /dev/null';
-}
-
 function parseAddedLines(diff) {
   const addedLines = [];
   let nextLine;
   for (const rawLine of diff.split(/\r?\n/)) {
     const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(rawLine);
     if (hunk) nextLine = Number(hunk[1]);
-    else if (nextLine !== undefined && rawLine.startsWith('+') && !isNewFileHeader(rawLine)) {
+    else if (nextLine !== undefined && rawLine.startsWith('+')) {
       addedLines.push({ line: nextLine, text: rawLine.slice(1) });
       nextLine += 1;
     } else if (nextLine !== undefined && (!rawLine.startsWith('-') || rawLine.startsWith('---'))) {
