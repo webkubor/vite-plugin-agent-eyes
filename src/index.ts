@@ -24,15 +24,17 @@ export type {
 } from './guard'
 
 /**
- * vite-plugin-agent-eyes —— 给 AI agent 的自愈遥测层（不是给人看的 dev 日志）。
+ * vite-plugin-agent-eyes —— 给 AI agent 的自愈遥测层，也提供提交前风险门禁。
  *
  * 设计取向：稳定可解析 / 噪声预分类 / 专补 fetch 看不到的盲区 / 自描述入口 / 服务闭环。
- * 装上后，任意在该项目里干活的 agent 都能读到结构化运行时视野，跑「读日志→定位→改→验证」闭环。
+ * 装上后，任意在该项目里干活的 agent 都能读到结构化运行时视野，跑「读日志→定位→改→验证」闭环；
+ * 人在提交前也可以通过 agentGuard 看到 staged 风险。
  *
- * 三类实时流（写进 <logDir>/，每次启动清空，*.log 不应入库）：
+ * 运行时实时流（写进 <logDir>/<port>/，每次启动清空，*.log 不应入库）：
  *  1. api-calls.log —— 全部 API（成功+失败）+ 路由跳转，带请求/响应体。查接口契约、定字段。
  *  2. errors.log    —— API 失败 + 前端运行时错误，聚合去重（相同签名折叠 + 计数）。只看"哪坏了"。
- *  3. proxy.log     —— 代理层 header 真相（Cookie / Set-Cookie / status），fetch 看不到的网络层。
+ *  3. proxy-<host>.log —— 代理层 header 真相（Cookie / Set-Cookie / status），fetch 看不到的网络层。
+ * 提交前报告写进 log/guard-report.json。
  */
 
 export interface AgentDebuggerOptions {
@@ -276,7 +278,7 @@ class ErrorAggregator {
 
 const MANIFEST = `# Agent 自愈遥测（log/）
 
-> 这些日志是**给 AI agent 读的运行时视野**，不是给人的 dev 日志。
+> 这些日志是**给 AI agent 读的运行时视野**；提交前 guard 报告在 \`log/guard-report.json\`，给人和 agent 共用。
 > 由 vite-plugin-agent-eyes 产生，仅本地 dev，**每次启动清空**（只反映本次会话），\`*.log\` 不入库。
 
 ## 排查顺序（读日志 → 定位 → 改 → 重启 dev → 再读验证）
