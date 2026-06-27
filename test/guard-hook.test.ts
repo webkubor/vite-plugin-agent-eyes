@@ -101,6 +101,32 @@ describe('generated guard hook script', () => {
     expect(report.items[0]?.check).toBe('noAny')
   })
 
+  it('keeps a passing result when only report writing fails', () => {
+    const dir = makeRepo()
+    fs.writeFileSync(path.join(dir, 'safe.ts'), 'const value = 1\n')
+    git(dir, ['add', 'safe.ts'])
+
+    const result = runGuard({ reportFile: '.' }, dir)
+
+    expect(result.passed).toBe(true)
+    expect(result.summary).toEqual({ block: 0, warn: 0 })
+    expect(result.items).toEqual([])
+    expect(result.reportError).toContain('guard report write failed')
+  })
+
+  it('blocks staged secrets in paths containing newlines', () => {
+    const dir = makeRepo()
+    const fileName = 'a\nb.ts'
+    fs.writeFileSync(path.join(dir, fileName), 'const token = "sk_live_1234567890abcdef"\n')
+    git(dir, ['add', fileName])
+
+    const result = runGuard({ checks: ['secrets'] }, dir)
+
+    expect(result.passed).toBe(false)
+    expect(result.summary.block).toBe(1)
+    expect(result.items[0]?.file).toBe(fileName)
+  })
+
   it('returns a block result and still writes a report when git commands fail', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-eyes-no-git-'))
     createdRepos = [...createdRepos, dir]
@@ -112,6 +138,45 @@ describe('generated guard hook script', () => {
     expect(result.items[0]?.check).toBe('guard')
     expect(result.items[0]?.severity).toBe('block')
     expect(report.items[0]?.message).toContain('git staged file collection failed')
+  })
+
+  it('lets generated hook pass when only report writing fails', () => {
+    const dir = makeRepo()
+    fs.writeFileSync(path.join(dir, 'safe.ts'), 'const value = 1\n')
+    git(dir, ['add', 'safe.ts'])
+
+    const scriptFile = path.join(dir, '.git', 'hooks', 'agent-eyes-guard.mjs')
+    fs.mkdirSync(path.dirname(scriptFile), { recursive: true })
+    fs.writeFileSync(scriptFile, createGuardHookScript({ reportFile: '.' }))
+
+    const output = execFileSync(process.execPath, [scriptFile], { cwd: dir, encoding: 'utf8' })
+
+    expect(output).toContain('[agent-eyes:guard] PASS')
+    expect(output).toContain('guard report write failed')
+  })
+
+  it('blocks staged secrets in newline paths from the generated hook', () => {
+    const dir = makeRepo()
+    const fileName = 'a\nb.ts'
+    fs.writeFileSync(path.join(dir, fileName), 'const token = "sk_live_1234567890abcdef"\n')
+    git(dir, ['add', fileName])
+
+    const scriptFile = path.join(dir, '.git', 'hooks', 'agent-eyes-guard.mjs')
+    fs.mkdirSync(path.dirname(scriptFile), { recursive: true })
+    fs.writeFileSync(scriptFile, createGuardHookScript({ checks: ['secrets'] }))
+
+    let failed = false
+    try {
+      execFileSync(process.execPath, [scriptFile], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    } catch {
+      failed = true
+    }
+
+    expect(failed).toBe(true)
+    const report = JSON.parse(fs.readFileSync(path.join(dir, 'log', 'guard-report.json'), 'utf8')) as {
+      items: Array<{ file?: string }>
+    }
+    expect(report.items[0]?.file).toBe(fileName)
   })
 
   it('preserves narrowed noAny behavior in the generated script', () => {
