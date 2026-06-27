@@ -7,6 +7,21 @@ import { captureScreenshot } from './cdp'
 // git workflow（提交前检查 + 提交后 webhook）—— 独立导出，与遥测职责解耦
 export { agentGit } from './git'
 export type { AgentGitOptions, AgentGitWebhook, CommitInfo } from './git'
+export {
+  agentGuard,
+  createGuardHookScript,
+  normalizeGuardConfig,
+  renderGuardReport,
+  runGuard,
+} from './guard'
+export type {
+  AgentGuardChecks,
+  AgentGuardLevel,
+  AgentGuardOptions,
+  GuardReportItem,
+  GuardResult,
+  GuardSeverity,
+} from './guard'
 
 /**
  * vite-plugin-agent-eyes —— 给 AI agent 的自愈遥测层（不是给人看的 dev 日志）。

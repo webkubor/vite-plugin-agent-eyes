@@ -2,6 +2,7 @@ import type { Plugin } from 'vite'
 import fs from 'node:fs'
 import path from 'node:path'
 import { execSync } from 'node:child_process'
+import { createGuardHookScript, type AgentGuardOptions } from './guard'
 
 /**
  * agentGit —— 让任意 Vite 项目零配置获得「提交前检查 + 提交后 webhook 推送」。
@@ -47,6 +48,8 @@ export interface AgentGitWebhook {
 export interface AgentGitOptions {
   /** 提交前依次执行的命令；任一非零退出即阻断提交。例：['pnpm typecheck', 'pnpm lint'] */
   precommit?: string[]
+  /** 提交前运行 agentGuard；传 false 可显式关闭。 */
+  guard?: AgentGuardOptions | false
   /** 提交成功后推送通知，支持单个或多个 webhook */
   webhook?: AgentGitWebhook | AgentGitWebhook[]
   /** 通知里显示的项目名，默认取仓库名 */
@@ -117,8 +120,15 @@ function isManageable(file: string): boolean {
   }
 }
 
-function preCommitScript(commands: string[]): string {
-  const body = commands.map((c) => `${c} || exit 1`).join('\n')
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
+
+function preCommitScript(commands: string[], guardFile?: string): string {
+  const body = [
+    ...(guardFile ? [`node ${shellQuote(guardFile)} || exit 1`] : []),
+    ...commands.map((c) => `${c} || exit 1`),
+  ].join('\n')
   return `#!/usr/bin/env sh
 ${MARK_BEGIN}
 # 提交前检查——任一命令非零退出即阻断提交（git commit --no-verify 可临时跳过）
@@ -218,14 +228,15 @@ for (const webhook of webhooks) {
 export function agentGit(options: AgentGitOptions = {}): Plugin {
   const enabled = options.enabled ?? true
   const precommit = options.precommit ?? []
-  const { webhook, projectLabel, force = false } = options
+  const { guard, webhook, projectLabel, force = false } = options
+  const hasGuard = guard !== undefined && guard !== false
 
   return {
     name: 'vite-plugin-agent-eyes-git',
     apply: 'serve',
     configureServer(server) {
       if (!enabled) return
-      if (precommit.length === 0 && !webhook) return
+      if (precommit.length === 0 && !webhook && !hasGuard) return
 
       const root = server.config.root || process.cwd()
       const log = (msg: string) => server.config.logger.info(`\x1b[36m[agent-eyes:git]\x1b[0m ${msg}`)
@@ -259,14 +270,18 @@ export function agentGit(options: AgentGitOptions = {}): Plugin {
 
       const installed: string[] = []
 
-      // pre-commit
-      if (precommit.length > 0) {
+      // pre-commit + guard 脚本
+      if (precommit.length > 0 || hasGuard) {
         const file = path.join(hooksDir, 'pre-commit')
         if (!force && !isManageable(file)) {
           warn(`已存在非本插件管理的 pre-commit，跳过（如需接管请设 force:true 或手动合并）`)
         } else {
-          if (writeIfChanged(file, preCommitScript(precommit))) {
+          const guardFile = hasGuard ? path.join(hooksDir, 'agent-eyes-guard.mjs') : undefined
+          const wroteGuard = guardFile ? writeIfChanged(guardFile, createGuardHookScript(guard || {})) : false
+          if (writeIfChanged(file, preCommitScript(precommit, guardFile))) {
             fs.chmodSync(file, 0o755)
+            installed.push('pre-commit')
+          } else if (wroteGuard) {
             installed.push('pre-commit')
           }
         }
