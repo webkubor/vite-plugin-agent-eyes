@@ -1,7 +1,7 @@
 {
   "name": "vite-plugin-agent-eyes",
-  "version": "0.8.0",
-  "description": "给 AI agent 的自愈遥测层：结构化运行时日志（API/错误/代理 header）+ 本地 cookie 修复 + 提交前风险门禁。Agent-readable runtime telemetry and pre-commit guard for Vite dev.",
+  "version": "0.9.0",
+  "description": "给 AI agent 的自愈遥测层：结构化运行时日志（API/错误/代理 header）+ 本地 cookie 修复 + 登录态画像 + 提交前风险门禁。Agent-readable runtime telemetry, auth profile hints, and pre-commit guard for Vite dev.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -17,6 +17,7 @@
     "self-healing",
     "proxy",
     "cookie",
+    "auth",
     "git-hooks",
     "pre-commit",
     "guard",

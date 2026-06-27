@@ -2,6 +2,20 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.9.0] - 2026-06-28
+
+### Added
+- **脱敏登录态画像**：新增 `recordLoginSuccess()`，本地 dev 登录成功后可记录 `userId/email/name/roles/tenantId` 等安全字段，写入 `log/<port>/auth-state.json`，并注入只读 `window.__AGENT_EYES_AUTH__`，方便 agent 还原已登录 UI 和浏览器控制。
+- **一次性登录态记录器**：新增 `installAgentAuthRecorder({ getProfile })`，由业务代码提供当前用户画像，插件只做脱敏记录，不抓 token/cookie。
+- **auth-state 测试覆盖**：新增脱敏、BOM 注入、middleware 写入测试，确保不会保存原始邮箱、token、cookie、session 等敏感内容。
+
+### Changed
+- **本地产物忽略**：`.gitignore` 新增 `log/`、`.agent-eyes/`、`*.local.json`，避免运行时日志、登录态报告和本地调试 JSON 进入 Git。
+- `package.json` 版本升至 `0.9.0`，README/SKILL 更新登录态画像使用说明。
+
+### Safety
+- 登录态画像只保留 allowlist 字段；`token`、`secret`、`password`、`authorization`、`cookie`、`session`、`refresh` 等敏感 key 会被丢弃，邮箱写入前脱敏。
+
 ## [0.8.0] - 2026-06-27
 
 ### Added
@@ -109,8 +123,9 @@
 - 三类结构化日志：`api-calls.log` / `errors.log` / `proxy.log`
 - 招牌功能：本地 http 上游 `Set-Cookie` 改写（去 `Domain` / 剥 `Secure` / `SameSite=None → Lax`），解决「登录成功却一直 401」
 
-[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.6.0...HEAD
-[0.8.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.8.0
 [0.7.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.6.0...HEAD
 [0.6.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.6.0
 [0.5.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.5.0

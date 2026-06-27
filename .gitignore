@@ -1,6 +1,9 @@
 node_modules/
 dist/
+log/
+.agent-eyes/
 *.log
+*.local.json
 pnpm-lock.yaml
 package-lock.json
 .worktrees/

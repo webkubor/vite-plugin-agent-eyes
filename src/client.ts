@@ -6,6 +6,15 @@
  *  - 一键自动：autoInstrument()（自动包装 fetch/XHR/导航/全局错误/控制台/DOM 快照）
  */
 
+import {
+  createLoginAuthState,
+  installBrowserAuthState,
+  type AgentAuthProfileInput,
+  type AgentAuthState,
+} from './auth-state'
+
+export type { AgentAuthProfileInput, AgentAuthState } from './auth-state'
+
 const DEFAULT_ENDPOINT = '/dev/log'
 
 function isDev() {
@@ -269,6 +278,52 @@ export interface AutoInstrumentOptions {
   nav?: boolean
   /** 自动捕获全局错误 + 控制台 + DOM 快照（默认 true） */
   errors?: boolean
+}
+
+/** 登录态记录选项。 */
+export interface AgentAuthRecordOptions {
+  endpoint?: string
+  pagePath?: string
+}
+
+/** 自动记录登录态的安装选项。 */
+export interface AgentAuthRecorderOptions extends AgentAuthRecordOptions {
+  getProfile: () => AgentAuthProfileInput | null | undefined | Promise<AgentAuthProfileInput | null | undefined>
+}
+
+function currentPagePath(): string | undefined {
+  if (typeof location === 'undefined') return undefined
+  return location.pathname || undefined
+}
+
+/** 记录一次登录成功画像，写入 BOM 并上报给 agentDebugger。不会保存 token/cookie。 */
+export function recordLoginSuccess(profile: AgentAuthProfileInput, options: AgentAuthRecordOptions = {}): AgentAuthState {
+  const endpoint = options.endpoint ?? DEFAULT_ENDPOINT
+  const state = createLoginAuthState(profile, { pagePath: options.pagePath ?? currentPagePath() })
+  if (isDev()) {
+    installBrowserAuthState(state)
+    post(endpoint, { kind: 'auth', event: 'login_success', state })
+  }
+  return state
+}
+
+/** 安装一次性登录态记录器，从业务提供的 getProfile 读取当前用户画像。 */
+export function installAgentAuthRecorder(options: AgentAuthRecorderOptions): () => void {
+  let active = true
+  void Promise.resolve()
+    .then(() => options.getProfile())
+    .then((profile) => {
+      if (!active || !profile) return
+      recordLoginSuccess(profile, options)
+    })
+    .catch(() => {})
+
+  return () => {
+    active = false
+    if (typeof window !== 'undefined') {
+      Reflect.deleteProperty(window, '__AGENT_EYES_AUTH__')
+    }
+  }
 }
 
 function safePath(url: string): string {

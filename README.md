@@ -6,7 +6,7 @@
 
 **给 AI agent 的自愈遥测层，也给人一道提交前风险门禁。**
 
-运行时日志让 agent 在不看代码的前提下，自己读日志、定位、修复、验证；提交前 guard 让人在 `git commit` 前先看到明显错误、敏感信息和屎山信号。
+运行时日志让 agent 在不看代码的前提下，自己读日志、定位、修复、验证；登录态画像让 agent 快速知道当前浏览器是谁；提交前 guard 让人在 `git commit` 前先看到明显错误、敏感信息和屎山信号。
 
 [![npm version](https://img.shields.io/npm/v/vite-plugin-agent-eyes.svg?color=cb3837&label=npm)](https://www.npmjs.com/package/vite-plugin-agent-eyes)
 [![npm downloads](https://img.shields.io/npm/dm/vite-plugin-agent-eyes.svg?color=cb3837)](https://www.npmjs.com/package/vite-plugin-agent-eyes)
@@ -28,7 +28,7 @@
 - 控制台错误转瞬即逝，且混着扩展噪声——**没有可追溯、可分类的错误流**。
 - 接口返回的真实字段常和类型定义不一致——**只能猜**。
 
-本插件把这些落成 **结构化、可解析、每次启动清空、最新在最上** 的运行时日志；0.8.0 起还会把提交前 guard 报告写成 JSON，方便人和 agent 共用。
+本插件把这些落成 **结构化、可解析、每次启动清空、最新在最上** 的运行时日志；0.9.0 起还会记录脱敏登录态画像，方便 agent 还原 UI 和控制浏览器。
 
 ## 安装
 
@@ -204,6 +204,22 @@ logConsoleEntry('warn', ['deprecated API called'])
 snapshotDom()
 ```
 
+**记录登录成功账户画像**（0.9.0+）：
+
+```ts
+import { recordLoginSuccess } from 'vite-plugin-agent-eyes/client'
+
+recordLoginSuccess({
+  userId: currentUser.id,
+  email: currentUser.email,        // 写入前自动脱敏为 a***@example.com
+  name: currentUser.name,
+  roles: currentUser.roles,
+  tenantId: currentUser.tenantId,
+})
+```
+
+这只保存脱敏后的账户画像和登录成功信号，不保存 token、cookie、Authorization、refresh token。浏览器里会注入只读 `window.__AGENT_EYES_AUTH__`，dev server 会写入 `log/<port>/auth-state.json`。
+
 ## 日志与报告
 
 运行时日志写进 `log/<port>/`（`*.log` 不入库），每次启动清空，**最新记录在文件最上方**，`head` 即看本次会话。顶层 `log/instances.json` 记录当前端口、分支、进程和启动时间。
@@ -215,6 +231,7 @@ snapshotDom()
 | **log/\<port\>/console.log** | 全级别控制台输出（log/warn/error/info/debug） | React dev warning、库 deprecation、调试信息 |
 | **log/\<port\>/proxy-\<host\>.log** | 代理层 `Cookie` / `Set-Cookie` 属性 / status | 网络/鉴权层（fetch 看不到） |
 | **log/\<port\>/snapshots/** | 错误截图（PNG）+ DOM 快照（HTML） | 视觉+结构双重现场 |
+| **log/\<port\>/auth-state.json** | 最近一次登录成功的脱敏账户画像 | 还原 UI、浏览器控制、确认当前账号 |
 | **log/guard-report.json** | 提交前 guard 的最近一次 JSON 报告 | 看 commit 被阻断或预警的原因 |
 
 `log/README.md` 是给 agent 的自描述入口（启动时自动生成）。`errors.log` 顶部是 `Top Errors`（按频率降序），省去 agent 自己数频率。
@@ -310,11 +327,15 @@ log/<port>/proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req)
 | `installAgentErrorReporter()` | 挂全局错误捕获 + 全控制台拦截 + DOM 快照，返回卸载函数 |
 | `logApiCall(entry)` | 在 HTTP 拦截器记录一次 API 调用（默认脱敏敏感字段，`entry.raw=true` 放行） |
 | `logConsoleEntry(level, args)` | 记录一条控制台输出（log/warn/error/info/debug） |
+| `recordLoginSuccess(profile, opts?)` | 记录一次登录成功画像，脱敏后写 BOM 和 `auth-state.json` |
+| `installAgentAuthRecorder({ getProfile })` | 从业务提供的 `getProfile` 读取当前用户画像并记录一次，返回卸载函数 |
 | `snapshotDom()` | 抓取当前页面 DOM 结构（document.body.innerHTML），供 agent 解析 |
 | `logNav(from, to)` | 记录路由导航轨迹 |
 | `logError(line)` | 记录任意自定义错误行 |
 
 `autoInstrument` 选项：`logBody`(默认 true) / `raw`(默认 false) / `nav`(默认 true) / `errors`(默认 true) / `endpoint`。
+
+`recordLoginSuccess` 允许字段：`userId` / `accountId` / `email` / `name` / `username` / `roles` / `tenantId` / `projectId` / `workspaceId` / `extra`。敏感 key 会被丢弃，`email` 会脱敏。
 
 ## 更新日志
 

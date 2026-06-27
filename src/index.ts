@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execSync } from 'node:child_process'
 import { captureScreenshot } from './cdp'
+import { sanitizeAuthProfile, type AgentAuthProfileInput, type AgentAuthState } from './auth-state'
 
 // git workflow（提交前检查 + 提交后 webhook）—— 独立导出，与遥测职责解耦
 export { agentGit } from './git'
@@ -70,7 +71,8 @@ type ErrorPayload = { kind: 'error'; line: string; cid?: string }
 type ConsolePayload = { kind: 'console'; level: string; msg: string }
 type ConsoleBatchPayload = { kind: 'console_batch'; entries: { level: string; msg: string; count: number }[] }
 type DomPayload = { kind: 'dom'; url: string; html: string; cid?: string }
-type DevLogPayload = ApiPayload | NavPayload | ErrorPayload | ConsolePayload | ConsoleBatchPayload | DomPayload
+type AuthPayload = { kind: 'auth'; event?: 'login_success'; state?: Partial<AgentAuthState> }
+type DevLogPayload = ApiPayload | NavPayload | ErrorPayload | ConsolePayload | ConsoleBatchPayload | DomPayload | AuthPayload
 
 const HEADER_SEP = '\n\n'
 
@@ -127,10 +129,27 @@ function parse(raw: string): DevLogPayload | null {
     if (p.kind === 'console' && (p as ConsolePayload).msg) return p as DevLogPayload
     if (p.kind === 'console_batch' && (p as ConsoleBatchPayload).entries?.length) return p as DevLogPayload
     if (p.kind === 'dom' && (p as DomPayload).html) return p as DevLogPayload
+    if (p.kind === 'auth' && (p as AuthPayload).state?.profile) return p as DevLogPayload
   } catch {
     return null
   }
   return null
+}
+
+function safePayloadString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, 200) : undefined
+}
+
+function authStateFromPayload(p: AuthPayload): AgentAuthState | null {
+  if (!p.state?.profile || typeof p.state.profile !== 'object') return null
+  const state: AgentAuthState = {
+    loggedIn: true,
+    updatedAt: safePayloadString(p.state.updatedAt) ?? new Date().toISOString(),
+    profile: sanitizeAuthProfile(p.state.profile as AgentAuthProfileInput),
+  }
+  const pagePath = safePayloadString(p.state.page_path)
+  if (pagePath) state.page_path = pagePath
+  return state
 }
 
 /**
@@ -287,7 +306,8 @@ const MANIFEST = `# Agent 自愈遥测（log/）
 2. **console.log** —— 全级别控制台输出（log/warn/error/info/debug），React dev warning、库 deprecation 警告都在这里。
 3. **api-calls.log** —— 若是接口问题：看真实请求/响应体（别凭类型猜字段）、调用顺序。
 4. **proxy-<host>.log** —— 若是网络/鉴权层：请求带的 Cookie、响应的 Set-Cookie 属性、status。多个代理各自按 target host 分文件。fetch 看不到这层。
-5. **snapshots/** —— 错误时自动截图（PNG）+ DOM 快照（HTML），视觉+结构双重现场。
+5. **auth-state.json** —— 若要还原已登录 UI：看最近一次登录成功的脱敏账号画像。
+6. **snapshots/** —— 错误时自动截图（PNG）+ DOM 快照（HTML），视觉+结构双重现场。
 
 最新记录在文件**最上方**（header 之后），\`head\` 即看本次会话最近发生了什么。
 errors.log 的 Top Errors 区直接告诉你"哪个错误刷得最凶"，省去自己数频率。
@@ -340,7 +360,7 @@ const ROOT_MANIFEST = `# Agent 遥测日志（按 dev 端口隔离）
 多个 agent/dev server 可同目录、不同端口并行，**各自的日志在 \`log/<port>/\`**，互不覆盖。
 
 - 你的 dev 端口看 \`cs dev\` / vite 启动输出（如 5175）。
-- 你的日志在 \`log/<你的端口>/\`：\`errors.log\` / \`console.log\` / \`api-calls.log\` / \`proxy-*.log\` / \`snapshots/\`。
+- 你的日志在 \`log/<你的端口>/\`：\`errors.log\` / \`console.log\` / \`api-calls.log\` / \`proxy-*.log\` / \`auth-state.json\` / \`snapshots/\`。
 - \`instances.json\` 列出当前在写日志的端口 / 分支 / pid，方便确认你该读哪个。
 
 读法见 \`log/<port>/README.md\`。
@@ -358,10 +378,12 @@ export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
   let errAgg: ErrorAggregator | null = null
   let consoleWriter: LogWriter | null = null
   let snapshotsDir = path.join(baseDir, 'snapshots')
+  let authStateFile = path.join(baseDir, 'auth-state.json')
 
   function initForPort(port: number | string) {
     const logDir = path.join(baseDir, String(port))
     snapshotsDir = path.join(logDir, 'snapshots')
+    authStateFile = path.join(logDir, 'auth-state.json')
     fs.mkdirSync(snapshotsDir, { recursive: true })
     const header = `# Dev Log (port ${port}) — started ${ts()}`
     apiWriter = new LogWriter(path.join(logDir, 'api-calls.log'), flushMs, maxBytes)
@@ -457,6 +479,13 @@ export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
                 const pageHtml = `${doctype}<html><head><meta charset="utf-8"><title>DOM Snapshot</title></head><body><!-- url: ${p.url} -->\n${p.html}\n</body></html>`
                 fs.writeFileSync(domFile, pageHtml)
               } catch {}
+            } else if (p?.kind === 'auth') {
+              const state = authStateFromPayload(p)
+              if (state) {
+                try {
+                  fs.writeFileSync(authStateFile, JSON.stringify(state, null, 2))
+                } catch {}
+              }
             } else if (body) {
               // 解析失败的 body：压成单行再记，避免多行破坏日志结构
               ea.add(body.replace(/[\r\n]+/g, ' ⏎ ').slice(0, 500), stamp)
