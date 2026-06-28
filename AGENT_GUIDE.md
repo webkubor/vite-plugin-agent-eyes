@@ -2,6 +2,18 @@
 
 This file is for AI agents working inside a Vite project that has installed `vite-plugin-agent-eyes`.
 For human setup and API docs, read `README.md`.
+To make Codex, Claude, Gemini, or Hermes discover this guide automatically, read `AGENT_BOOTSTRAP.md`.
+
+## Supported Agents
+
+Codex, Claude Code, Gemini CLI, Hermes agent, and generic local coding agents can all use this tool because the runtime output is plain files:
+
+- Markdown: `log/README.md`, `log/<port>/README.md`
+- JSON: `log/instances.json`, `log/guard-report.json`, `log/<port>/auth-state.json`
+- Text logs: `errors.log`, `interaction.log`, `api-calls.log`, `console.log`, `proxy-<host>.log`
+- Visual artifacts: `snapshots/*.png`, `snapshots/*.html`
+
+Automatic usage depends on the agent reading a bootstrap entry such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, or a Hermes skill. Use `AGENT_BOOTSTRAP.md` to install those entries.
 
 ## When To Use
 

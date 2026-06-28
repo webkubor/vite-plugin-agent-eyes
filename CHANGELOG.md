@@ -2,6 +2,15 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.10.3] - 2026-06-28
+
+### Added
+- 新增 `AGENT_BOOTSTRAP.md`，明确 Codex、Claude Code、Gemini CLI、Hermes agent 的可用性、推荐入口文件和可复制指令片段。
+- `AGENT_GUIDE.md` 增加 supported agents 说明，强调日志是普通文件，多个 agent 都能使用，但自动发现需要各自启动入口。
+
+### Changed
+- README、SKILL、运行时 `log/<port>/README.md` 均补充 `AGENT_BOOTSTRAP.md` 入口，避免 agent 只看到人类文档而不会主动使用日志。
+
 ## [0.10.2] - 2026-06-28
 
 ### Added
@@ -150,7 +159,8 @@
 - 三类结构化日志：`api-calls.log` / `errors.log` / `proxy.log`
 - 招牌功能：本地 http 上游 `Set-Cookie` 改写（去 `Domain` / 剥 `Secure` / `SameSite=None → Lax`），解决「登录成功却一直 401」
 
-[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.2...HEAD
+[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.3...HEAD
+[0.10.3]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.9.0...v0.10.0

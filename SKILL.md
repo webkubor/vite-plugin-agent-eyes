@@ -1,14 +1,14 @@
 ---
 name: agent-eyes
 description: "给 AI agent 的自愈遥测层 — 在 Vite 项目里读结构化运行时日志（API/错误/控制台/交互/代理 header）+ 脱敏登录态画像 + 截图 + DOM 快照 + 提交前 guard 报告，自我诊断、修复、验证，无需人读代码"
-version: 0.10.2
+version: 0.10.3
 ---
 
 # Vite Agent Debugger
 
 让在 Vite 项目里干活的 agent 拥有**运行时视野**，跑「读日志 → 定位 → 改 → 重启 dev → 再读验证」的自愈闭环。
 配套 npm 包 `vite-plugin-agent-eyes`（源码在本目录 `src/`，可 `npm publish` 或 git 安装）。
-如果只需要 agent 操作流程，优先读 `AGENT_GUIDE.md`；README 面向人类安装和评估。
+如果只需要 agent 操作流程，优先读 `AGENT_GUIDE.md`；如果要让 Codex、Claude、Gemini、Hermes 主动发现并使用，读 `AGENT_BOOTSTRAP.md`；README 面向人类安装和评估。
 
 ## 何时用
 

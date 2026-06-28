@@ -311,7 +311,7 @@ const MANIFEST = `# Agent 自愈遥测（log/）
 
 > 这些日志是**给 AI agent 读的运行时视野**；提交前 guard 报告在 \`log/guard-report.json\`，给人和 agent 共用。
 > 由 vite-plugin-agent-eyes 产生，仅本地 dev，**每次启动清空**（只反映本次会话），\`*.log\` 不入库。
-> 若需要完整 agent 操作手册，读包内 \`AGENT_GUIDE.md\`；README 面向人类安装和 API 评估。
+> 若需要完整 agent 操作手册，读包内 \`AGENT_GUIDE.md\`；若要让 Codex/Claude/Gemini/Hermes 主动发现，读 \`AGENT_BOOTSTRAP.md\`；README 面向人类安装和 API 评估。
 
 ## 排查顺序（读日志 → 定位 → 改 → 重启 dev → 再读验证）
 
