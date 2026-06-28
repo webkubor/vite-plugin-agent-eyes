@@ -2,6 +2,11 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.10.1] - 2026-06-28
+
+### Fixed
+- 删除 README 中依赖 Bundlephobia 实时解析的 bundle size badge，避免 `img.shields.io/bundlephobia/minzip` 超时导致页面显示坏图。
+
 ## [0.10.0] - 2026-06-28
 
 ### Added
@@ -136,7 +141,8 @@
 - 三类结构化日志：`api-calls.log` / `errors.log` / `proxy.log`
 - 招牌功能：本地 http 上游 `Set-Cookie` 改写（去 `Domain` / 剥 `Secure` / `SameSite=None → Lax`），解决「登录成功却一直 401」
 
-[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.8.0
