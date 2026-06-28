@@ -4,6 +4,7 @@ import path from 'node:path'
 import { execSync } from 'node:child_process'
 import { captureScreenshot } from './cdp'
 import { sanitizeAuthProfile, type AgentAuthProfileInput, type AgentAuthState } from './auth-state'
+import { formatInteractionLine, type InteractionEntry } from './interaction'
 
 // git workflow（提交前检查 + 提交后 webhook）—— 独立导出，与遥测职责解耦
 export { agentGit } from './git'
@@ -35,6 +36,7 @@ export type {
  *  1. api-calls.log —— 全部 API（成功+失败）+ 路由跳转，带请求/响应体。查接口契约、定字段。
  *  2. errors.log    —— API 失败 + 前端运行时错误，聚合去重（相同签名折叠 + 计数）。只看"哪坏了"。
  *  3. proxy-<host>.log —— 代理层 header 真相（Cookie / Set-Cookie / status），fetch 看不到的网络层。
+ *  4. interaction.log —— click/input/change/submit/route 脱敏交互轨迹，用来还原复现路径。
  * 提交前报告写进 log/guard-report.json。
  */
 
@@ -72,7 +74,16 @@ type ConsolePayload = { kind: 'console'; level: string; msg: string }
 type ConsoleBatchPayload = { kind: 'console_batch'; entries: { level: string; msg: string; count: number }[] }
 type DomPayload = { kind: 'dom'; url: string; html: string; cid?: string }
 type AuthPayload = { kind: 'auth'; event?: 'login_success'; state?: Partial<AgentAuthState> }
-type DevLogPayload = ApiPayload | NavPayload | ErrorPayload | ConsolePayload | ConsoleBatchPayload | DomPayload | AuthPayload
+type InteractionPayload = { kind: 'interaction_batch'; entries: InteractionEntry[] }
+type DevLogPayload =
+  | ApiPayload
+  | NavPayload
+  | ErrorPayload
+  | ConsolePayload
+  | ConsoleBatchPayload
+  | DomPayload
+  | AuthPayload
+  | InteractionPayload
 
 const HEADER_SEP = '\n\n'
 
@@ -130,6 +141,7 @@ function parse(raw: string): DevLogPayload | null {
     if (p.kind === 'console_batch' && (p as ConsoleBatchPayload).entries?.length) return p as DevLogPayload
     if (p.kind === 'dom' && (p as DomPayload).html) return p as DevLogPayload
     if (p.kind === 'auth' && (p as AuthPayload).state?.profile) return p as DevLogPayload
+    if (p.kind === 'interaction_batch' && (p as InteractionPayload).entries?.length) return p as DevLogPayload
   } catch {
     return null
   }
@@ -304,10 +316,11 @@ const MANIFEST = `# Agent 自愈遥测（log/）
 
 1. **errors.log** —— 先看"哪坏了"：顶部是 Top Errors（聚合去重 + 频率），下方是最近原始记录。
 2. **console.log** —— 全级别控制台输出（log/warn/error/info/debug），React dev warning、库 deprecation 警告都在这里。
-3. **api-calls.log** —— 若是接口问题：看真实请求/响应体（别凭类型猜字段）、调用顺序。
-4. **proxy-<host>.log** —— 若是网络/鉴权层：请求带的 Cookie、响应的 Set-Cookie 属性、status。多个代理各自按 target host 分文件。fetch 看不到这层。
-5. **auth-state.json** —— 若要还原已登录 UI：看最近一次登录成功的脱敏账号画像。
-6. **snapshots/** —— 错误时自动截图（PNG）+ DOM 快照（HTML），视觉+结构双重现场。
+3. **interaction.log** —— click/input/change/submit/route 脱敏交互轨迹，用来还原复现路径（表单值只记 <redacted>）。
+4. **api-calls.log** —— 若是接口问题：看真实请求/响应体（别凭类型猜字段）、调用顺序。
+5. **proxy-<host>.log** —— 若是网络/鉴权层：请求带的 Cookie、响应的 Set-Cookie 属性、status。多个代理各自按 target host 分文件。fetch 看不到这层。
+6. **auth-state.json** —— 若要还原已登录 UI：看最近一次登录成功的脱敏账号画像。
+7. **snapshots/** —— 错误时自动截图（PNG）+ DOM 快照（HTML），视觉+结构双重现场。
 
 最新记录在文件**最上方**（header 之后），\`head\` 即看本次会话最近发生了什么。
 errors.log 的 Top Errors 区直接告诉你"哪个错误刷得最凶"，省去自己数频率。
@@ -360,7 +373,7 @@ const ROOT_MANIFEST = `# Agent 遥测日志（按 dev 端口隔离）
 多个 agent/dev server 可同目录、不同端口并行，**各自的日志在 \`log/<port>/\`**，互不覆盖。
 
 - 你的 dev 端口看 \`cs dev\` / vite 启动输出（如 5175）。
-- 你的日志在 \`log/<你的端口>/\`：\`errors.log\` / \`console.log\` / \`api-calls.log\` / \`proxy-*.log\` / \`auth-state.json\` / \`snapshots/\`。
+- 你的日志在 \`log/<你的端口>/\`：\`errors.log\` / \`console.log\` / \`interaction.log\` / \`api-calls.log\` / \`proxy-*.log\` / \`auth-state.json\` / \`snapshots/\`。
 - \`instances.json\` 列出当前在写日志的端口 / 分支 / pid，方便确认你该读哪个。
 
 读法见 \`log/<port>/README.md\`。
@@ -377,6 +390,7 @@ export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
   let apiWriter: LogWriter | null = null
   let errAgg: ErrorAggregator | null = null
   let consoleWriter: LogWriter | null = null
+  let interactionWriter: LogWriter | null = null
   let snapshotsDir = path.join(baseDir, 'snapshots')
   let authStateFile = path.join(baseDir, 'auth-state.json')
 
@@ -389,9 +403,11 @@ export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
     apiWriter = new LogWriter(path.join(logDir, 'api-calls.log'), flushMs, maxBytes)
     errAgg = new ErrorAggregator(path.join(logDir, 'errors.log'), header, flushMs, 200)
     consoleWriter = new LogWriter(path.join(logDir, 'console.log'), flushMs, maxBytes)
+    interactionWriter = new LogWriter(path.join(logDir, 'interaction.log'), flushMs, maxBytes)
     apiWriter.init(header)
     errAgg.init()
     consoleWriter.init(header)
+    interactionWriter.init(header)
     fs.writeFileSync(path.join(logDir, 'README.md'), MANIFEST)
     fs.writeFileSync(path.join(baseDir, 'README.md'), ROOT_MANIFEST)
     _resolvedLogPort = port // 下发给 agentProxy
@@ -416,7 +432,7 @@ export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
       }
 
       server.middlewares.use(endpoint, (req, res) => {
-        if (!apiWriter || !errAgg || !consoleWriter) {
+        if (!apiWriter || !errAgg || !consoleWriter || !interactionWriter) {
           res.statusCode = 204
           res.end()
           return
@@ -424,6 +440,7 @@ export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
         const aw = apiWriter
         const ea = errAgg
         const cw = consoleWriter
+        const iw = interactionWriter
         const snaps = snapshotsDir
         if (req.method !== 'POST') {
           res.statusCode = 405
@@ -471,6 +488,10 @@ export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
               }
             } else if (p?.kind === 'console') {
               cw.push(`[${stamp}] [${p.level}] ${p.msg}`)
+            } else if (p?.kind === 'interaction_batch') {
+              for (const entry of p.entries.slice(-100)) {
+                iw.push(formatInteractionLine(entry))
+              }
             } else if (p?.kind === 'dom') {
               const cidSuffix = p.cid ? `-${p.cid}` : ''
               const domFile = path.join(snaps, `dom-${Date.now()}${cidSuffix}.html`)

@@ -12,8 +12,17 @@ import {
   type AgentAuthProfileInput,
   type AgentAuthState,
 } from './auth-state'
+import { installAgentInteractionTracer } from './interaction-client'
 
 export type { AgentAuthProfileInput, AgentAuthState } from './auth-state'
+export {
+  installAgentInteractionTracer,
+  recordInteraction,
+  type AgentInteractionOptions,
+  type InteractionEntry,
+  type InteractionKind,
+  type InteractionTargetLike,
+} from './interaction-client'
 
 const DEFAULT_ENDPOINT = '/dev/log'
 
@@ -278,6 +287,8 @@ export interface AutoInstrumentOptions {
   nav?: boolean
   /** 自动捕获全局错误 + 控制台 + DOM 快照（默认 true） */
   errors?: boolean
+  /** 自动捕获 click/input/change/submit/route 交互轨迹（默认 true） */
+  interactions?: boolean
 }
 
 /** 登录态记录选项。 */
@@ -523,8 +534,9 @@ export function autoInstrument(opts: AutoInstrumentOptions = {}): () => void {
   const undoFns = [patchFetch(endpoint, logBody, raw), patchXHR(endpoint, logBody, raw)]
   if (opts.nav !== false) undoFns.push(patchNav(endpoint))
   if (opts.errors !== false) undoFns.push(installAgentErrorReporter(endpoint))
+  if (opts.interactions !== false) undoFns.push(installAgentInteractionTracer({ endpoint }))
   const undo = () => {
-    undoFns.forEach((u) => u())
+    undoFns.slice().reverse().forEach((u) => u())
     autoInstrumentUndo = null
   }
   autoInstrumentUndo = undo

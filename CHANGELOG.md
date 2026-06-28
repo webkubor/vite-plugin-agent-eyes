@@ -2,6 +2,19 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.10.0] - 2026-06-28
+
+### Added
+- **脱敏交互轨迹**：新增 `interaction.log`，记录 click/input/change/submit/route 顺序，帮助 agent 和人还原复现路径。
+- **客户端交互 API**：新增 `installAgentInteractionTracer()` 与 `recordInteraction()`；`autoInstrument()` 默认启用交互轨迹，可用 `interactions: false` 关闭。
+- **interaction 测试覆盖**：新增交互摘要、客户端上报、middleware 落盘测试，确保表单输入只写 `<redacted>`。
+
+### Changed
+- `package.json` 版本升至 `0.10.0`，README/SKILL 更新交互轨迹、日志速查和客户端 API。
+
+### Safety
+- 交互轨迹只保存目标摘要和路由路径，不保存 input/change 的真实值。
+
 ## [0.9.0] - 2026-06-28
 
 ### Added
@@ -123,8 +136,9 @@
 - 三类结构化日志：`api-calls.log` / `errors.log` / `proxy.log`
 - 招牌功能：本地 http 上游 `Set-Cookie` 改写（去 `Domain` / 剥 `Secure` / `SameSite=None → Lax`），解决「登录成功却一直 401」
 
-[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.9.0...HEAD
-[0.9.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.9.0...v0.10.0
+[0.9.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.8.0
 [0.7.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.6.0...HEAD
 [0.6.0]: https://github.com/webkubor/vite-plugin-agent-eyes/releases/tag/v0.6.0

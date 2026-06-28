@@ -28,7 +28,7 @@
 - 控制台错误转瞬即逝，且混着扩展噪声——**没有可追溯、可分类的错误流**。
 - 接口返回的真实字段常和类型定义不一致——**只能猜**。
 
-本插件把这些落成 **结构化、可解析、每次启动清空、最新在最上** 的运行时日志；0.9.0 起还会记录脱敏登录态画像，方便 agent 还原 UI 和控制浏览器。
+本插件把这些落成 **结构化、可解析、每次启动清空、最新在最上** 的运行时日志；0.9.0 起记录脱敏登录态画像，0.10.0 起自动记录脱敏交互轨迹，方便 agent 还原 UI、控制浏览器和复现路径。
 
 ## 安装
 
@@ -180,7 +180,7 @@ agentGit({
 
 ### 2. 客户端（你的应用入口文件）
 
-**推荐：一行自动埋点**（0.2.0+）——自动包装 `fetch` / `XMLHttpRequest` / 路由导航 / 全局错误 / 全控制台 / DOM 快照，无需逐个拦截器手动埋点：
+**推荐：一行自动埋点**（0.2.0+）——自动包装 `fetch` / `XMLHttpRequest` / 路由导航 / 全局错误 / 全控制台 / DOM 快照；0.10.0+ 默认记录 click/input/change/submit/route 脱敏交互轨迹，无需逐个拦截器手动埋点：
 
 ```ts
 import { autoInstrument } from 'vite-plugin-agent-eyes/client'
@@ -220,6 +220,17 @@ recordLoginSuccess({
 
 这只保存脱敏后的账户画像和登录成功信号，不保存 token、cookie、Authorization、refresh token。浏览器里会注入只读 `window.__AGENT_EYES_AUTH__`，dev server 会写入 `log/<port>/auth-state.json`。
 
+**交互轨迹**（0.10.0+）：`autoInstrument()` 默认安装，也可手动调用：
+
+```ts
+import { installAgentInteractionTracer, recordInteraction } from 'vite-plugin-agent-eyes/client'
+
+installAgentInteractionTracer()
+recordInteraction('click', buttonElement)
+```
+
+`input` / `change` 只写 `<redacted>`，不会保存真实表单值；dev server 会写入 `log/<port>/interaction.log`，用于还原“先到哪个页面、点了哪个按钮、在哪个表单触发问题”。
+
 ## 日志与报告
 
 运行时日志写进 `log/<port>/`（`*.log` 不入库），每次启动清空，**最新记录在文件最上方**，`head` 即看本次会话。顶层 `log/instances.json` 记录当前端口、分支、进程和启动时间。
@@ -229,6 +240,7 @@ recordLoginSuccess({
 | **log/\<port\>/api-calls.log** | 全部 API（成功 + 失败）+ 路由跳转，带请求/响应体 | 查接口契约、定字段、调用顺序 |
 | **log/\<port\>/errors.log** | API 失败 + 前端运行时错误，**聚合去重 + 频率计数**（0.2.0） | 只看「哪坏了」、哪个刷得最凶 |
 | **log/\<port\>/console.log** | 全级别控制台输出（log/warn/error/info/debug） | React dev warning、库 deprecation、调试信息 |
+| **log/\<port\>/interaction.log** | click/input/change/submit/route 脱敏交互轨迹 | 还原复现路径、定位“人或 agent 做了什么” |
 | **log/\<port\>/proxy-\<host\>.log** | 代理层 `Cookie` / `Set-Cookie` 属性 / status | 网络/鉴权层（fetch 看不到） |
 | **log/\<port\>/snapshots/** | 错误截图（PNG）+ DOM 快照（HTML） | 视觉+结构双重现场 |
 | **log/\<port\>/auth-state.json** | 最近一次登录成功的脱敏账户画像 | 还原 UI、浏览器控制、确认当前账号 |
@@ -323,8 +335,10 @@ log/<port>/proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req)
 
 | 函数 | 说明 |
 |------|------|
-| `autoInstrument(opts?)` | **一键自动埋点**：fetch + XHR + 导航 + 错误 + 全控制台 + DOM 快照，各子项可独立开关，返回卸载函数。幂等（防 StrictMode/HMR 重复包装） |
+| `autoInstrument(opts?)` | **一键自动埋点**：fetch + XHR + 导航 + 错误 + 全控制台 + DOM 快照 + 脱敏交互轨迹，各子项可独立开关，返回卸载函数。幂等（防 StrictMode/HMR 重复包装） |
 | `installAgentErrorReporter()` | 挂全局错误捕获 + 全控制台拦截 + DOM 快照，返回卸载函数 |
+| `installAgentInteractionTracer(opts?)` | 自动捕获 click/input/change/submit/route，写入 `interaction.log`，返回卸载函数 |
+| `recordInteraction(kind, target?, opts?)` | 手动记录一次交互；input/change 只写 `<redacted>` |
 | `logApiCall(entry)` | 在 HTTP 拦截器记录一次 API 调用（默认脱敏敏感字段，`entry.raw=true` 放行） |
 | `logConsoleEntry(level, args)` | 记录一条控制台输出（log/warn/error/info/debug） |
 | `recordLoginSuccess(profile, opts?)` | 记录一次登录成功画像，脱敏后写 BOM 和 `auth-state.json` |
@@ -333,7 +347,7 @@ log/<port>/proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req)
 | `logNav(from, to)` | 记录路由导航轨迹 |
 | `logError(line)` | 记录任意自定义错误行 |
 
-`autoInstrument` 选项：`logBody`(默认 true) / `raw`(默认 false) / `nav`(默认 true) / `errors`(默认 true) / `endpoint`。
+`autoInstrument` 选项：`logBody`(默认 true) / `raw`(默认 false) / `nav`(默认 true) / `errors`(默认 true) / `interactions`(默认 true) / `endpoint`。
 
 `recordLoginSuccess` 允许字段：`userId` / `accountId` / `email` / `name` / `username` / `roles` / `tenantId` / `projectId` / `workspaceId` / `extra`。敏感 key 会被丢弃，`email` 会脱敏。
 
