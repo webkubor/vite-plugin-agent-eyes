@@ -29,6 +29,12 @@
 
 本插件把这些落成 **结构化、可解析、每次启动清空、最新在最上** 的运行时日志；0.9.0 起记录脱敏登录态画像，0.10.0 起自动记录脱敏交互轨迹，方便 agent 还原 UI、控制浏览器和复现路径。
 
+## 文档入口
+
+- **人读**：继续看本 README，重点是安装方式、能力说明、API 和配置项。
+- **agent 读**：[AGENT_GUIDE.md](./AGENT_GUIDE.md) 是可发布的 agent 操作手册；项目运行后还会生成 `log/README.md` 和 `log/<port>/README.md`，告诉 agent 当前端口该读哪些运行时日志。
+- **Codex/Claude skill**：[SKILL.md](./SKILL.md) 是给支持 skill 机制的 agent 注册和触发用的压缩入口。
+
 ## 安装
 
 ```bash

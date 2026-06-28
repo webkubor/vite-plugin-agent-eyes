@@ -2,6 +2,15 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.10.2] - 2026-06-28
+
+### Added
+- 新增 `AGENT_GUIDE.md`，作为独立于 README 的 agent 操作手册，说明 setup 检查、日志入口、排查顺序和安全边界。
+
+### Changed
+- README 增加“文档入口”，明确区分人读 README、agent 读 `AGENT_GUIDE.md` / `log/README.md`、skill 机制读 `SKILL.md`。
+- `SKILL.md` 版本同步到 `0.10.2`，运行时生成的 `log/<port>/README.md` 也指向 agent 操作手册。
+
 ## [0.10.1] - 2026-06-28
 
 ### Fixed
@@ -141,7 +150,8 @@
 - 三类结构化日志：`api-calls.log` / `errors.log` / `proxy.log`
 - 招牌功能：本地 http 上游 `Set-Cookie` 改写（去 `Domain` / 剥 `Secure` / `SameSite=None → Lax`），解决「登录成功却一直 401」
 
-[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.2...HEAD
+[0.10.2]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.8.0...v0.9.0
