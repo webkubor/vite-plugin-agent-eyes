@@ -2,6 +2,16 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.10.4] - 2026-06-28
+
+### Added
+- `agentDebugger()` / `agentProxy()` 增加配置诊断：endpoint 未以 `/` 开头、`flushMs` / `maxBytes` 过小、proxy target 非 `http(s)` 时输出 `[agent-eyes]` warning。
+- 新增配置诊断测试，覆盖 `agentDebugger` 与 `agentProxy` 的 warning 行为。
+
+### Changed
+- 补强导出函数 JSDoc，让 `agentDebugger()`、`agentProxy()`、`autoInstrument()`、`installAgentErrorReporter()`、`installAgentInteractionTracer()` 在 IDE hover 和 `.d.ts` 中有更明确说明。
+- `agentProxy({ extra: { configure } })` 现在会保留用户传入的 `configure` 回调，不再被 agent-eyes 自身监听器覆盖。
+
 ## [0.10.3] - 2026-06-28
 
 ### Added
@@ -159,7 +169,8 @@
 - 三类结构化日志：`api-calls.log` / `errors.log` / `proxy.log`
 - 招牌功能：本地 http 上游 `Set-Cookie` 改写（去 `Domain` / 剥 `Secure` / `SameSite=None → Lax`），解决「登录成功却一直 401」
 
-[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.3...HEAD
+[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.4...HEAD
+[0.10.4]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.0...v0.10.1

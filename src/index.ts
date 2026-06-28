@@ -1,4 +1,4 @@
-import type { Plugin, ProxyOptions } from 'vite'
+import type { Plugin, ProxyOptions, ViteDevServer } from 'vite'
 import fs from 'node:fs'
 import path from 'node:path'
 import { execSync } from 'node:child_process'
@@ -41,9 +41,9 @@ export type {
  */
 
 export interface AgentDebuggerOptions {
-  /** 日志目录（相对项目根），默认 'log' */
+  /** 日志目录（相对项目根），默认 `'log'`；建议加入 `.gitignore`。 */
   logDir?: string
-  /** 接收前端上报的端点，默认 '/dev/log' */
+  /** 接收前端上报的端点，默认 `'/dev/log'`；必须和 `autoInstrument({ endpoint })` 保持一致。 */
   endpoint?: string
   /** 日志落盘节流间隔（ms），默认 200——高频上报只批写，不阻塞 dev server */
   flushMs?: number
@@ -86,6 +86,49 @@ type DevLogPayload =
   | InteractionPayload
 
 const HEADER_SEP = '\n\n'
+const MIN_FLUSH_MS = 1
+const MIN_LOG_BYTES = 4096
+
+function warnLine(server: ViteDevServer, message: string) {
+  server.config.logger.warn(`\x1b[33m[agent-eyes]\x1b[0m ${message}`)
+}
+
+function warnConsole(message: string) {
+  console.warn(`\x1b[33m[agent-eyes]\x1b[0m ${message}`)
+}
+
+function optionBoundWarnings(owner: string, flushMs: number, maxBytes: number): string[] {
+  const warnings: string[] = []
+  if (!Number.isFinite(flushMs) || flushMs < MIN_FLUSH_MS) {
+    warnings.push(`${owner}.flushMs=${flushMs} 过小，可能导致日志刷盘异常；建议使用默认 200。`)
+  }
+  if (!Number.isFinite(maxBytes) || maxBytes < MIN_LOG_BYTES) {
+    warnings.push(`${owner}.maxBytes=${maxBytes} 过小，可能导致日志几乎立刻截断；建议至少 ${MIN_LOG_BYTES}。`)
+  }
+  return warnings
+}
+
+function warnOptionBounds(server: ViteDevServer, owner: string, flushMs: number, maxBytes: number) {
+  optionBoundWarnings(owner, flushMs, maxBytes).forEach((warning) => warnLine(server, warning))
+}
+
+function warnEndpoint(server: ViteDevServer, endpoint: string) {
+  if (!endpoint.startsWith('/')) {
+    warnLine(server, `agentDebugger.endpoint="${endpoint}" 不是以 "/" 开头，客户端上报可能打不到 dev middleware；建议使用 "/dev/log"。`)
+  }
+}
+
+function proxyTargetWarnings(target: string): string[] {
+  try {
+    const protocol = new URL(target).protocol
+    if (protocol !== 'http:' && protocol !== 'https:') {
+      return [`agentProxy target="${target}" 不是 http(s)，proxy header/cookie 日志可能无效。`]
+    }
+  } catch {
+    return [`agentProxy target="${target}" 不是合法 URL；示例：agentProxy("https://api.example.com")。`]
+  }
+  return []
+}
 
 function pad(n: number, size = 2) {
   return String(n).padStart(size, '0')
@@ -380,6 +423,21 @@ const ROOT_MANIFEST = `# Agent 遥测日志（按 dev 端口隔离）
 读法见 \`log/<port>/README.md\`。
 `
 
+/**
+ * 安装 Vite dev 遥测插件，写入 agent 可读的 `log/<port>/` 运行时视野。
+ *
+ * 常见配置错误会在 dev server 启动时以 `[agent-eyes]` 前缀 warning，例如 endpoint 没有 `/`、日志阈值过小。
+ *
+ * @example
+ * ```ts
+ * import { defineConfig } from 'vite'
+ * import { agentDebugger } from 'vite-plugin-agent-eyes'
+ *
+ * export default defineConfig({
+ *   plugins: [agentDebugger({ screenshots: true })],
+ * })
+ * ```
+ */
 export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
   const baseDir = path.resolve(process.cwd(), options.logDir ?? 'log')
   const endpoint = options.endpoint ?? '/dev/log'
@@ -419,6 +477,8 @@ export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
     name: 'vite-plugin-agent-eyes',
     apply: 'serve',
     configureServer(server) {
+      warnEndpoint(server, endpoint)
+      warnOptionBounds(server, 'agentDebugger', flushMs, maxBytes)
       fs.mkdirSync(baseDir, { recursive: true })
       const hs = server.httpServer
       if (hs) {
@@ -529,11 +589,11 @@ export interface AgentProxyOptions {
   rewriteCookiesForLocalhost?: boolean
   /** 日志目录，默认 'log' */
   logDir?: string
-  /** 落盘节流间隔（ms），默认 200 */
+  /** 落盘节流间隔（ms），默认 200；过小会在 dev server 启动时 warning。 */
   flushMs?: number
-  /** 单文件大小上限（字节），默认 512KB */
+  /** 单文件大小上限（字节），默认 512KB；过小会在 dev server 启动时 warning。 */
   maxBytes?: number
-  /** 透传给 vite ProxyOptions 的额外字段 */
+  /** 透传给 Vite `ProxyOptions` 的额外字段；`extra.configure` 会在 agent-eyes 监听器注册前执行。 */
   extra?: Partial<ProxyOptions>
 }
 
@@ -547,15 +607,27 @@ function proxyTag(target: string): string {
 }
 
 /**
- * 包装一个 /api 代理：写 proxy-<host>.log（header 真相）+ 本地 cookie 改写。
- * 用法：server.proxy = { '/api': agentProxy('https://api.example.com') }
- * 多个代理各自按 target host 分文件（proxy-api.example.com.log 等），互不覆盖。
+ * 包装一个 Vite dev proxy：写 `proxy-<host>.log`（Cookie / Set-Cookie / status）并修复 localhost cookie。
+ *
+ * 目标地址不是 `http(s)`、日志阈值过小等常见配置错误会在 Vite 配置加载时 warning。
+ *
+ * @example
+ * ```ts
+ * server: {
+ *   proxy: {
+ *     '/api': agentProxy('https://api.example.com')
+ *   }
+ * }
+ * ```
  */
 export function agentProxy(target: string, opts: AgentProxyOptions = {}): ProxyOptions {
   const rewrite = opts.rewriteCookiesForLocalhost ?? true
   const baseDir = path.resolve(process.cwd(), opts.logDir ?? 'log')
   const flushMs = opts.flushMs ?? 200
   const maxBytes = opts.maxBytes ?? 512 * 1024
+  const extraConfigure = opts.extra?.configure
+  const configWarnings = [...proxyTargetWarnings(target), ...optionBoundWarnings('agentProxy', flushMs, maxBytes)]
+  configWarnings.forEach(warnConsole)
 
   // 懒初始化：首个响应到达时端口已确定（agentDebugger 在 listening 时下发 _resolvedLogPort），
   // 把 proxy 日志也归到 log/<port>/，与该 dev server 的其它日志同处、并行互不刷。
@@ -574,7 +646,8 @@ export function agentProxy(target: string, opts: AgentProxyOptions = {}): ProxyO
     changeOrigin: true,
     secure: true,
     ...opts.extra,
-    configure: (proxy) => {
+    configure: (proxy, options) => {
+      extraConfigure?.(proxy, options)
       proxy.on('proxyRes', (proxyRes, req) => {
         const pw = writer()
         const reqCookie = req.headers?.cookie

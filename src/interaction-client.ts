@@ -44,6 +44,7 @@ function targetLike(target: unknown): InteractionTargetLike | undefined {
 }
 
 export interface AgentInteractionOptions extends InteractionEntryOptions {
+  /** 前端上报端点，默认 `/dev/log`；必须和 `agentDebugger({ endpoint })` 保持一致。 */
   endpoint?: string
 }
 
@@ -64,8 +65,12 @@ export function recordInteraction(
   return entry
 }
 
-/** 安装自动交互轨迹采集：click/input/change/submit + history/popstate。 */
 let interactionTracerUndo: (() => void) | null = null
+/**
+ * 安装自动交互轨迹采集：click/input/change/submit + history/popstate。
+ *
+ * 返回卸载函数。`input` / `change` 只记录 `<redacted>`，不会保存真实表单值。
+ */
 export function installAgentInteractionTracer(options: { endpoint?: string } = {}): () => void {
   if (!isDev() || typeof window === 'undefined' || typeof document === 'undefined' || !window.history) return () => {}
   if (interactionTracerUndo) return interactionTracerUndo

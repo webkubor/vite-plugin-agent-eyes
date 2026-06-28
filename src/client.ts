@@ -222,11 +222,12 @@ export function snapshotDom(endpoint: string = DEFAULT_ENDPOINT) {
 
 const CONSOLE_LEVELS = ['log', 'warn', 'error', 'info', 'debug'] as const
 
-/**
- * 一次性挂上全局错误捕获：window error / unhandledrejection / 全控制台 / DOM 快照。
- * 在应用入口（main.tsx）调用一次。返回卸载函数。
- */
 let errReporterInstalled = false
+/**
+ * 一次性挂上全局错误捕获：`window error` / `unhandledrejection` / 全控制台 / DOM 快照。
+ *
+ * 在应用入口调用一次即可；返回卸载函数。仅 `import.meta.env.DEV === true` 时生效。
+ */
 export function installAgentErrorReporter(endpoint: string = DEFAULT_ENDPOINT): () => void {
   if (!isDev() || typeof window === 'undefined' || errReporterInstalled) return () => {}
   errReporterInstalled = true
@@ -519,11 +520,12 @@ function patchNav(endpoint: string): () => void {
   }
 }
 
-/**
- * 一键自动埋点：fetch + XMLHttpRequest + 路由导航 + 全局错误 + 全控制台 + DOM 快照。
- * 在应用入口（main.tsx）调用一次即可，返回卸载函数。
- */
 let autoInstrumentUndo: (() => void) | null = null
+/**
+ * 一键自动埋点：fetch + XMLHttpRequest + 路由导航 + 全局错误 + 全控制台 + DOM 快照 + 脱敏交互轨迹。
+ *
+ * 在应用入口调用一次即可，返回卸载函数。默认 dev-only；重复调用会复用同一个安装结果，防 StrictMode/HMR 重复包装。
+ */
 export function autoInstrument(opts: AutoInstrumentOptions = {}): () => void {
   if (!isDev()) return () => {}
   // 幂等：重复调用（React StrictMode / HMR 快速刷新）返回已注册的卸载函数，避免多层包装
