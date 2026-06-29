@@ -1,7 +1,7 @@
 ---
 name: agent-eyes
-description: "给 AI agent 的自愈遥测层 — 在 Vite 项目里读结构化运行时日志（API/错误/控制台/交互/代理 header）+ 脱敏登录态画像 + 截图 + DOM 快照 + 提交前 guard 报告，自我诊断、修复、验证，无需人读代码"
-version: 0.10.3
+description: "vite-plugin-agent-eyes 的 agent 使用手册。两块能力：① 自愈遥测——读结构化运行时日志（API/错误/控制台/交互/代理 header）+ 脱敏登录态 + 截图 + DOM 快照，不靠猜代码就诊断修复；② 提交治理——agentGit（去 husky，统一 pre-commit/post-commit + 飞书通知）、agentGuard（提交期硬拦 secret/超长文件/屎山）、agentSizeWatch（dev 期实时警告超长文件）。在 Vite/Astro 项目里配置 agentGit/agentGuard/agentSizeWatch 或排查 guard 拦截/误报时必读。"
+version: 0.12.0
 ---
 
 # Vite Agent Debugger
@@ -58,33 +58,38 @@ recordLoginSuccess({ userId, email, name, roles, tenantId })
 
 未装包但想临时用：优先用 git / workspace 方式安装本包；不要只拷 `src/index.ts` / `src/client.ts`，它们依赖同目录下的 `cdp`、`git`、`guard-*` 等模块。
 
-## 提交前 guard（0.8.0+）
+## 提交治理：agentGit / agentGuard / agentSizeWatch（配置速查）
 
-只想要提交前检查时用独立插件：
+三者职责（钩子由 `apply:'serve'` 插件在 **dev 启动**时装/重写——改了配置或升级版本要跑一次 `pnpm dev` 才生效；Astro 项目加进 `astro.config` 的 `vite.plugins`）：
 
-```ts
-import { agentGuard } from 'vite-plugin-agent-eyes'
+| 插件 | 时机 | 作用 |
+|------|------|------|
+| `agentGit` | 提交前/后 | 替代 husky：跑 `precommit` 命令 + 可内嵌 `guard`；提交后飞书通知。自带 rebase/cherry 重放去重 |
+| `agentGuard` | 提交时 | 硬拦 staged：secret/超大文件/超长行数/TODO/any/console.log。**已用 agentGit 就配进 `agentGit({ guard })`，别再单独挂**（争用 pre-commit） |
+| `agentSizeWatch` | dev 写码当下 | 超长文件在控制台 `[agent-eyes:size]` warn，只警告不阻断。专治 AI 堆超长 CSS |
 
-export default defineConfig({
-  plugins: [agentGuard({ level: 'block' })],
-})
-```
-
-已经使用 `agentGit()` 时，把 guard 配进去，不要同时挂两个插件：
-
+**典型配置（本项目三仓在用的形态）：**
 ```ts
 agentGit({
-  guard: { level: 'block' },
-  precommit: ['pnpm typecheck', 'pnpm lint'],
-  webhook: { url: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxxx', format: 'feishu' },
+  projectLabel: '国内官网',
+  precommit: ['sh scripts/precommit.sh'],     // 任一非零退出即阻断
+  webhook: [{ url: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxxx', format: 'feishu' }],
+  guard: { level: 'block', fileLength: { warn: 400, block: 800 } },  // 硬拦屎山
+  claimHooksPath: true,   // 全局 core.hooksPath（lefthook 等）遮蔽本仓钩子时，设本地覆盖
+  force: true,            // 接管已存在的非本插件 pre-commit
 })
+// dev 实时警告（可选，独立挂）：agentSizeWatch({ warn: 400, cssWarn: 300 })
 ```
 
-- `warn`：只报告，不阻断。
-- `block`：默认推荐，secrets / largeFiles 等红线阻断，屎山信号警告。
-- `strict`：当前等同 `block`，预留给后续更严格门禁。
-- guard 只检查 staged files；不要把未暂存文件当成 guard 结论来源。
-- 最近一次 JSON 报告在 `log/guard-report.json`。
+**level**：`warn` 只报告 / `block`（推荐）红线阻断 / `strict` 暂等同 block。
+**guard.checks**：`['secrets','largeFiles','fileLength','todo','noAny','noConsoleLog']`，可按需开关。
+
+**两条 0.12.0 行为，配 guard 前必须知道（否则会以为是 bug）：**
+- **lockfile/压缩产物不计 `fileLength`**：`pnpm-lock.yaml`/`package-lock.json`/`yarn.lock`/`*.lock`/`go.sum`/`.min.js|css` 自动跳过——生成物非手写代码。要再扩名单改 `GENERATED_FILE_PATTERN`（guard-core + guard-hook 两份拷贝同步）。
+- **webhook 不会自伤**：`agentGit` 自动把自己配置的 webhook URL 注入 guard `allowSecrets`，secret 检查不再把它当泄漏。手动放行其它字面量用 `guard.allowSecrets: [...]`。
+
+- guard 只检查 staged files；最近一次 JSON 报告在 `log/guard-report.json`。
+- 完整选项表见 README `### agentGit / agentGuard / agentSizeWatch` API 段。
 
 ## 自愈闭环（核心，照此执行）
 
