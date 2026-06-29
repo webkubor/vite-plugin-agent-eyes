@@ -173,9 +173,22 @@ function notifyScript(webhooks: AgentGitWebhook | AgentGitWebhook[], projectLabe
 
   return `// 由 vite-plugin-agent-eyes (agentGit) 生成，请勿手改——改 vite.config 后重启 dev 会重写。
 import { execSync } from 'node:child_process'
-import { basename } from 'node:path'
+import { basename, join } from 'node:path'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
 const g = (a) => { try { return execSync('git ' + a, { stdio: ['ignore','pipe','ignore'] }).toString().trim() } catch { return '' } }
+
+// 幂等 + 重放守卫：避免 rebase/merge/cherry-pick 重放、快速连提、多 dev 导致同一提交重复推送
+const gitDir = g('rev-parse --git-dir')
+if (gitDir) {
+  for (const f of ['rebase-merge', 'rebase-apply', 'CHERRY_PICK_HEAD', 'MERGE_HEAD', 'REVERT_HEAD']) {
+    if (existsSync(join(gitDir, f))) process.exit(0)  // 重放/合并进行中，不推
+  }
+  const head = g('rev-parse HEAD')
+  const marker = join(gitDir, 'agent-eyes-last-notify')
+  try { if (head && existsSync(marker) && readFileSync(marker, 'utf8').trim() === head) process.exit(0) } catch {}
+  try { if (head) writeFileSync(marker, head) } catch {}
+}
 
 const repo = basename((g('config --get remote.origin.url') || '').replace(/\\.git$/, '')) || basename(g('rev-parse --show-toplevel'))
 const now = new Date()

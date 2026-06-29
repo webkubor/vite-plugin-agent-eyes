@@ -9,6 +9,9 @@ import { formatInteractionLine, type InteractionEntry } from './interaction'
 // git workflow（提交前检查 + 提交后 webhook）—— 独立导出，与遥测职责解耦
 export { agentGit } from './git'
 export type { AgentGitOptions, AgentGitWebhook, CommitInfo } from './git'
+
+// 构建期版本/tag 戳记（只读，不造 tag）
+export { agentVersion } from './version'
 export {
   agentGuard,
   createGuardHookScript,
