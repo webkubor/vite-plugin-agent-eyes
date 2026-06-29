@@ -12,6 +12,10 @@ export type { AgentGitOptions, AgentGitWebhook, CommitInfo } from './git'
 
 // 构建期版本/tag 戳记（只读，不造 tag）
 export { agentVersion } from './version'
+
+// dev 期文件行数/体积实时看门狗（CSS 更严，只 warn 不阻断）
+export { agentSizeWatch } from './size-watch'
+export type { AgentSizeWatchOptions } from './size-watch'
 export {
   agentGuard,
   createGuardHookScript,

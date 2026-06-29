@@ -244,6 +244,30 @@ describe('runTextChecks', () => {
     expect(fiveLinesWithTrailingNewline.find((item) => item.check === 'fileLength')?.severity).toBe('block')
   })
 
+  it('skips fileLength for generated lockfiles but not for source files', () => {
+    const config = normalizeGuardConfig({ checks: { fileLength: { warn: 3, block: 5 } } })
+    const longLockfile = 'a: 1\n'.repeat(10)
+    const lock = runTextChecks(stagedFile({ path: 'pnpm-lock.yaml', content: longLockfile }), config)
+    const source = runTextChecks(stagedFile({ path: 'src/big.ts', content: longLockfile }), config)
+
+    expect(lock.some((item) => item.check === 'fileLength')).toBe(false)
+    expect(source.find((item) => item.check === 'fileLength')?.severity).toBe('block')
+  })
+
+  it('allowlists configured webhook URLs from secret detection', () => {
+    const url = 'https://open.feishu.cn/open-apis/bot/v2/hook/abc-123'
+    const line = `webhook: [{ url: '${url}', format: 'feishu' }]`
+    const config = normalizeGuardConfig({ checks: ['secrets'], allowSecrets: [url] })
+    const withAllow = runTextChecks(stagedFile({ content: line, addedLines: [{ line: 1, text: line }] }), config)
+    const withoutAllow = runTextChecks(
+      stagedFile({ content: line, addedLines: [{ line: 1, text: line }] }),
+      normalizeGuardConfig({ checks: ['secrets'] }),
+    )
+
+    expect(withAllow.some((item) => item.check === 'secrets')).toBe(false)
+    expect(withoutAllow.some((item) => item.check === 'secrets')).toBe(true)
+  })
+
   it('does not flag noAny in comments or string prose', () => {
     const items = runTextChecks(
       stagedFile({

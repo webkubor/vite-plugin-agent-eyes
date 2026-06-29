@@ -51,6 +51,8 @@ export interface AgentGuardOptions {
   checks?: AgentGuardChecks | Array<keyof AgentGuardChecks>
   /** 报告输出路径，默认 log/guard-report.json。 */
   reportFile?: string
+  /** secret 检查白名单：命中这些字面量的行不计为泄漏（agentGit 会自动注入自己配置的 webhook URL）。 */
+  allowSecrets?: string[]
 }
 
 /** 标准化后的普通检查配置。 */
@@ -81,6 +83,8 @@ export interface NormalizedGuardConfig {
   level: AgentGuardLevel
   /** JSON 报告输出路径。 */
   reportFile: string
+  /** secret 检查白名单字面量。 */
+  allowSecrets: string[]
   /** 标准化后的内置检查项。 */
   checks: {
     secrets: NormalizedGuardCheck
@@ -153,6 +157,13 @@ export const DEFAULT_FILE_LENGTH_WARN = 400
 
 /** 默认文件长度阻断阈值。 */
 export const DEFAULT_FILE_LENGTH_BLOCK = 800
+
+/** dev 期 size watch：CSS/SCSS 默认警告阈值（更严，AI 写 CSS 易堆超长文件）。 */
+export const DEFAULT_CSS_LENGTH_WARN = 300
+
+/** 生成物文件：lockfile 与压缩产物不计入 fileLength（非手写代码，行数无意义）。 */
+export const GENERATED_FILE_PATTERN =
+  /(?:^|\/)(?:pnpm-lock\.yaml|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|bun\.lockb?|composer\.lock|Cargo\.lock|poetry\.lock|Gemfile\.lock|Podfile\.lock|go\.sum)$|\.min\.(?:js|css)$/
 
 /** secret/token/webhook 文本检测规则。 */
 export const SECRET_PATTERNS = [

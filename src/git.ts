@@ -303,7 +303,15 @@ export function agentGit(options: AgentGitOptions = {}): Plugin {
           warn(`已存在非本插件管理的 pre-commit，跳过（如需接管请设 force:true 或手动合并）`)
         } else {
           const guardFile = hasGuard ? path.join(hooksDir, 'agent-eyes-guard.mjs') : undefined
-          const wroteGuard = guardFile ? writeIfChanged(guardFile, createGuardHookScript(guard || {})) : false
+          // agentGit 自己配置的 webhook URL 不是泄漏的 secret，注入 guard 白名单避免自伤
+          const ownWebhookUrls = (Array.isArray(webhook) ? webhook : webhook ? [webhook] : [])
+            .map((w) => w?.url)
+            .filter((url): url is string => Boolean(url))
+          const guardOptions: AgentGuardOptions = {
+            ...(guard || {}),
+            allowSecrets: [...((guard || {}).allowSecrets ?? []), ...ownWebhookUrls],
+          }
+          const wroteGuard = guardFile ? writeIfChanged(guardFile, createGuardHookScript(guardOptions)) : false
           if (writeIfChanged(file, preCommitScript(precommit, guardFile))) {
             fs.chmodSync(file, 0o755)
             installed.push('pre-commit')

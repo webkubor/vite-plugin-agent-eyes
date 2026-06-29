@@ -12,6 +12,7 @@ import {
   DEFAULT_FILE_LENGTH_WARN,
   DEFAULT_LARGE_FILE_BLOCK_BYTES,
   DEFAULT_REPORT_FILE,
+  GENERATED_FILE_PATTERN,
   SECRET_PATTERNS,
   type AddedLine,
   type AgentGuardChecks,
@@ -88,6 +89,7 @@ export function normalizeGuardConfig(options: AgentGuardOptions = {}): Normalize
   return {
     level,
     reportFile: options.reportFile ?? DEFAULT_REPORT_FILE,
+    allowSecrets: options.allowSecrets ?? [],
     checks: {
       secrets: normalizedSwitch(level, checks, 'secrets', 'block'),
       largeFiles: {
@@ -116,15 +118,17 @@ function isConsoleLogFile(filePath: string): boolean {
   return /\.(?:ts|tsx|js|jsx|vue|svelte)$/.test(filePath)
 }
 
-function lineCount(content: string): number {
+/** 统计文本行数（忽略末尾换行），dev 期 size watch 与 commit guard 共用。 */
+export function lineCount(content: string): number {
   if (!content) return 0
   const withoutFinalNewline = content.replace(/\r?\n$/, '')
   return withoutFinalNewline ? withoutFinalNewline.split(/\r?\n/).length : 0
 }
 
-function secretLineKeys(addedLines: AddedLine[]): Set<number> {
+function secretLineKeys(addedLines: AddedLine[], allowSecrets: string[]): Set<number> {
   const keys = new Set<number>()
   for (const added of addedLines) {
+    if (allowSecrets.some((allowed) => added.text.includes(allowed))) continue
     if (SECRET_PATTERNS.some((pattern) => pattern.test(added.text))) {
       keys.add(added.line)
     }
@@ -290,14 +294,15 @@ export function runTextChecks(file: StagedFile, config: NormalizedGuardConfig): 
   }
 
   const lines = lineCount(file.content)
-  if (config.checks.fileLength.enabled && lines >= config.checks.fileLength.block) {
+  const skipLength = GENERATED_FILE_PATTERN.test(file.path)
+  if (config.checks.fileLength.enabled && !skipLength && lines >= config.checks.fileLength.block) {
     items.push({
       check: 'fileLength',
       severity: config.level === 'warn' ? 'warn' : 'block',
       file: file.path,
       message: `${lines} lines exceeds block threshold ${config.checks.fileLength.block}`,
     })
-  } else if (config.checks.fileLength.enabled && lines >= config.checks.fileLength.warn) {
+  } else if (config.checks.fileLength.enabled && !skipLength && lines >= config.checks.fileLength.warn) {
     items.push({
       check: 'fileLength',
       severity: config.checks.fileLength.severity,
@@ -306,7 +311,7 @@ export function runTextChecks(file: StagedFile, config: NormalizedGuardConfig): 
     })
   }
 
-  const secretLines = config.checks.secrets.enabled ? secretLineKeys(file.addedLines) : new Set<number>()
+  const secretLines = config.checks.secrets.enabled ? secretLineKeys(file.addedLines, config.allowSecrets) : new Set<number>()
   if (config.checks.secrets.enabled) {
     for (const added of file.addedLines) {
       if (secretLines.has(added.line)) {

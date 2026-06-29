@@ -15,6 +15,7 @@ const DEFAULT_REPORT_FILE = 'log/guard-report.json';
 const DEFAULT_LARGE_FILE_BLOCK_BYTES = 1024 * 1024;
 const DEFAULT_FILE_LENGTH_WARN = 400;
 const DEFAULT_FILE_LENGTH_BLOCK = 800;
+const GENERATED_FILE_PATTERN = /(?:^|\/)(?:pnpm-lock\.yaml|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|bun\.lockb?|composer\.lock|Cargo\.lock|poetry\.lock|Gemfile\.lock|Podfile\.lock|go\.sum)$|\.min\.(?:js|css)$/;
 const SECRET_PATTERNS = [
   /-----BEGIN (?:RSA |EC |OPENSSH |)?PRIVATE KEY-----/,
   /\b(?:token|secret|api[_-]?key|access[_-]?token|refresh[_-]?token)\b\s*[:=]\s*['"][^'"]{12,}['"]/i,
@@ -63,6 +64,7 @@ function normalizeGuardConfig(options = {}) {
   return {
     level,
     reportFile: options.reportFile ?? DEFAULT_REPORT_FILE,
+    allowSecrets: options.allowSecrets ?? [],
     checks: {
       secrets: normalizedSwitch(level, checks, 'secrets', 'block'),
       largeFiles: { enabled: enabledFor(checks, 'largeFiles'), severity: severityFor(level, switchValue(checks, 'largeFiles'), 'block'), blockBytes: largeFiles.blockBytes ?? DEFAULT_LARGE_FILE_BLOCK_BYTES },
@@ -132,9 +134,10 @@ function lineCount(content) {
   return withoutFinalNewline ? withoutFinalNewline.split(/\r?\n/).length : 0;
 }
 
-function secretLineKeys(addedLines) {
+function secretLineKeys(addedLines, allowSecrets) {
   const keys = new Set();
   for (const added of addedLines) {
+    if (allowSecrets.some((allowed) => added.text.includes(allowed))) continue;
     if (SECRET_PATTERNS.some((pattern) => pattern.test(added.text))) keys.add(added.line);
   }
   return keys;
@@ -160,12 +163,13 @@ function runTextChecks(file, config) {
     items.push({ check: 'largeFiles', severity: config.checks.largeFiles.severity, file: file.path, message: String(file.bytes) + ' bytes exceeds ' + String(config.checks.largeFiles.blockBytes) + ' bytes' });
   }
   const lines = lineCount(file.content);
-  if (config.checks.fileLength.enabled && lines >= config.checks.fileLength.block) {
+  const skipLength = GENERATED_FILE_PATTERN.test(file.path);
+  if (config.checks.fileLength.enabled && !skipLength && lines >= config.checks.fileLength.block) {
     items.push({ check: 'fileLength', severity: config.level === 'warn' ? 'warn' : 'block', file: file.path, message: String(lines) + ' lines exceeds block threshold ' + String(config.checks.fileLength.block) });
-  } else if (config.checks.fileLength.enabled && lines >= config.checks.fileLength.warn) {
+  } else if (config.checks.fileLength.enabled && !skipLength && lines >= config.checks.fileLength.warn) {
     items.push({ check: 'fileLength', severity: config.checks.fileLength.severity, file: file.path, message: String(lines) + ' lines exceeds warn threshold ' + String(config.checks.fileLength.warn) });
   }
-  const secretLines = config.checks.secrets.enabled ? secretLineKeys(file.addedLines) : new Set();
+  const secretLines = config.checks.secrets.enabled ? secretLineKeys(file.addedLines, config.allowSecrets) : new Set();
   if (config.checks.secrets.enabled) for (const added of file.addedLines) {
     if (secretLines.has(added.line)) items.push(addedLineItem('secrets', config.checks.secrets.severity, file, added, '疑似 hardcoded secret/token/webhook'));
   }

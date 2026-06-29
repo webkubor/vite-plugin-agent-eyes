@@ -2,6 +2,19 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.12.0] - 2026-06-29
+
+### Added
+- 新增 `agentSizeWatch()` dev 插件：`apply: 'serve'`，dev 启动全量扫描源文件、热更新增量检查改动文件，行数超阈值在控制台 `[agent-eyes:size]` warn（只警告、不阻断、不影响 build）。补齐 `agentGuard` 仅在提交时拦超长文件的早期反馈缺口，尤其针对 AI 易堆超长的 CSS。
+- CSS/SCSS/Sass/Less 使用更严的默认阈值（`cssWarn` 300 行），其它源码用通用阈值（`warn` 400 行，复用 `guard-types` 的 `DEFAULT_FILE_LENGTH_WARN`）；阈值、include/exclude、enabled 均可配置。
+- 导出 `guard-core` 的 `lineCount()`，dev size watch 与 commit guard 共用行数统计逻辑，不重复造轮子。
+- 新增 `agentSizeWatch` 测试：覆盖启动扫描、热更新增量、CSS 更严阈值、排除目录、禁用。
+- `AgentGuardOptions.allowSecrets`：secret 检查白名单字面量，命中的行不计为泄漏。
+
+### Fixed
+- `agentGuard` 不再把 lockfile/压缩产物（`pnpm-lock.yaml`、`package-lock.json`、`yarn.lock`、`*.lock`、`go.sum`、`.min.js/.css` 等）计入 `fileLength` 行数硬限制——生成物非手写代码，行数无意义。
+- `agentGit` 自动把自己配置的 webhook URL 注入 guard `allowSecrets`，避免 secret 检查把 agentGit **自己要 post 的** 飞书/钉钉/企微 webhook 当成泄漏拦下来（自伤）。
+
 ## [0.10.4] - 2026-06-28
 
 ### Added

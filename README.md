@@ -190,6 +190,31 @@ agentGit({
 
 每次提交会在控制台打印报告，并写入 `log/guard-report.json`。这个文件给 agent 后续排查用；运行时日志仍在 `log/<port>/`。
 
+### 1.7 Size Watch：dev 期文件超长实时警告（0.12.0+，可选）
+
+`agentGuard()` 在**提交时**才拦超长文件，`agentSizeWatch()` 则在**写代码当下**就提示——dev 启动扫一遍源文件，之后每次保存对改动文件增量检查，超阈值就在 Vite 控制台 `[agent-eyes:size]` 黄色 warn。**只 warn，不阻断、不影响 build**。专治 AI 把 CSS 越堆越长的屎山文件，早期就能看见。
+
+```ts
+import { agentSizeWatch } from 'vite-plugin-agent-eyes'
+
+export default defineConfig({
+  plugins: [
+    agentSizeWatch(), // 默认即可：通用 400 行、CSS/SCSS/Less 300 行
+    // 或自定义：agentSizeWatch({ warn: 400, cssWarn: 300, exclude: /vendor/ })
+  ],
+})
+```
+
+| 选项 | 默认 | 说明 |
+|------|------|------|
+| `enabled` | `true` | 关掉整个看门狗 |
+| `warn` | `400` | 通用源码（ts/tsx/js/vue/svelte/astro…）行数警告阈值 |
+| `cssWarn` | `300` | CSS/SCSS/Sass/Less 行数警告阈值（更严） |
+| `include` | 常见源码 + 样式扩展名 | 纳入扫描的文件正则 |
+| `exclude` | `node_modules`/`dist`/`build`/`.git`/`.astro`/`.next`/`.nuxt`/`coverage`/`log` | 排除路径正则（相对项目根匹配） |
+
+二进制 / 超过 1 MB 的文件直接跳过。Astro 项目同理把 `agentSizeWatch()` 加进 `astro.config` 的 `vite.plugins`。
+
 ### 2. 客户端（你的应用入口文件）
 
 **推荐：一行自动埋点**（0.2.0+）——自动包装 `fetch` / `XMLHttpRequest` / 路由导航 / 全局错误 / 全控制台 / DOM 快照；0.10.0+ 默认记录 click/input/change/submit/route 脱敏交互轨迹，无需逐个拦截器手动埋点：
@@ -342,6 +367,18 @@ log/<port>/proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req)
 | `level` | `'block'` | `warn` 只报告；`block` 阻断红线；`strict` 当前等同 `block`，预留更严格门禁 |
 | `checks` | 全部内置检查 | 数组形式选择检查项，或对象形式细调严重度/阈值 |
 | `reportFile` | `'log/guard-report.json'` | 最近一次 guard JSON 报告路径 |
+
+### `agentSizeWatch(options?): Plugin`
+
+| 选项 | 默认 | 说明 |
+|------|------|------|
+| `enabled` | `true` | 是否启用 dev 期看门狗 |
+| `warn` | `400` | 通用源码行数警告阈值 |
+| `cssWarn` | `300` | CSS/SCSS/Sass/Less 行数警告阈值（更严） |
+| `include` | 常见源码 + 样式扩展名 | 纳入扫描的文件正则 |
+| `exclude` | 见上文 | 排除路径正则 |
+
+> 仅 `apply: 'serve'`，启动全量扫描 + 热更新增量检查，超阈值在控制台 `[agent-eyes:size]` warn；只警告不阻断，不影响 build。
 
 ### 客户端（`vite-plugin-agent-eyes/client`）
 
