@@ -31,6 +31,7 @@
 
 ## 文档入口
 
+- **📖 在线文档站**：[webkubor.github.io/vite-plugin-agent-eyes](https://webkubor.github.io/vite-plugin-agent-eyes/) — 指南 + API 参考，结构化导航（源码在 [`website/`](./website)）。
 - **人读**：继续看本 README，重点是安装方式、能力说明、API 和配置项。
 - **agent 读**：[AGENT_GUIDE.md](./AGENT_GUIDE.md) 是可发布的 agent 操作手册；项目运行后还会生成 `log/README.md` 和 `log/<port>/README.md`，告诉 agent 当前端口该读哪些运行时日志。
 - **让 agent 主动会用**：[AGENT_BOOTSTRAP.md](./AGENT_BOOTSTRAP.md) 给 Codex、Claude Code、Gemini CLI、Hermes agent 提供入口文件和可复制指令片段。

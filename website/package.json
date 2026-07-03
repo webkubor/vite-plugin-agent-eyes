@@ -1,0 +1,18 @@
+{
+  "name": "vite-plugin-agent-eyes-docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "vite-plugin-agent-eyes 文档站（VitePress）。private + 不进主包 files 白名单，对 npm 发布零影响。",
+  "scripts": {
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.3"
+  },
+  "dependencies": {
+    "playwright-chromium": "^1.61.1"
+  }
+}
