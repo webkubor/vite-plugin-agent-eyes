@@ -1,0 +1,7 @@
+# website 子目录用 npm，需要提交 lock 文件供 CI npm ci 使用
+# 覆盖根 .gitignore 对 package-lock.json 的全局忽略
+!package-lock.json
+
+# 构建产物（根 .gitignore 的 dist/ 已覆盖，这里显式声明更清晰）
+.vitepress/dist/
+.vitepress/cache/
