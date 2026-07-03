@@ -41,14 +41,21 @@ export default defineConfig({
             { text: '为什么', link: '/guide/why' },
             { text: '安装', link: '/guide/install' },
             { text: '快速上手', link: '/guide/quickstart' },
+            { text: '招牌案例：登录成功却 401', link: '/guide/case-401' },
           ],
         },
         {
-          text: '核心能力',
+          text: '运行时日志（基础）',
           collapsed: false,
           items: [
-            { text: '运行时日志', link: '/guide/logs' },
+            { text: '日志总览', link: '/guide/logs' },
             { text: '错误截图 + DOM 快照', link: '/guide/snapshots' },
+          ],
+        },
+        {
+          text: 'Agent 视野（进阶）',
+          collapsed: false,
+          items: [
             { text: '登录态画像', link: '/guide/auth-profile' },
             { text: '交互轨迹', link: '/guide/interactions' },
           ],
@@ -60,13 +67,13 @@ export default defineConfig({
             { text: 'Git 工作流', link: '/guide/git-workflow' },
             { text: 'Human Guard', link: '/guide/guard' },
             { text: 'Size Watch', link: '/guide/size-watch' },
+            { text: '插件怎么搭配', link: '/guide/combination' },
           ],
         },
         {
           text: '更多',
           collapsed: true,
           items: [
-            { text: '招牌案例：登录成功却 401', link: '/guide/case-401' },
             { text: '框架无关性', link: '/guide/framework-agnostic' },
             { text: '已知局限 & Roadmap', link: '/guide/roadmap' },
           ],

@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: agent-eyes
-  text: AI agent 的自愈遥测层
-  tagline: 结构化运行时日志 + 本地 cookie 修复 + 登录态画像 + 提交前风险门禁。
+  text: 让你和 AI agent 都看清浏览器里发生了什么
+  tagline: 把 fetch 看不到的 cookie、转瞬即逝的错误、对不上的接口字段，全部落成结构化日志。还有本地 cookie 修复和提交前风险门禁。
   image:
     src: https://vitejs.dev/logo.svg
     alt: Vite
