@@ -1,3 +1,5 @@
+![logo](https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/vite-plugin-agent-eyes/cs-token4ai-1784193576898095000.png)
+
 <div align="center">
 
 <img src="https://vitejs.dev/logo.svg" alt="Vite" width="64" height="64" />
