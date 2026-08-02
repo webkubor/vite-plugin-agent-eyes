@@ -5,24 +5,42 @@ import { execSync } from 'node:child_process'
 import { captureScreenshot } from './cdp'
 import { sanitizeAuthProfile, type AgentAuthProfileInput, type AgentAuthState } from './auth-state'
 import { formatInteractionLine, type InteractionEntry } from './interaction'
+import { agentGit, type AgentGitOptions, type AgentGitWebhook, type CommitInfo } from './git'
+import { agentSizeWatch, type AgentSizeWatchOptions } from './size-watch'
+import { agentProjectGuide, inspectProject, type AgentProjectGuideOptions, type AgentProjectGuideReport } from './project-guide'
+import {
+  agentGuard,
+  createGuardHookScript,
+  normalizeGuardConfig,
+  renderGuardReport,
+  runGuard,
+  type AgentGuardChecks,
+  type AgentGuardLevel,
+  type AgentGuardOptions,
+  type GuardReportItem,
+  type GuardResult,
+  type GuardSeverity,
+} from './guard'
 
 // git workflow（提交前检查 + 提交后 webhook）—— 独立导出，与遥测职责解耦
-export { agentGit } from './git'
-export type { AgentGitOptions, AgentGitWebhook, CommitInfo } from './git'
+export { agentGit }
+export type { AgentGitOptions, AgentGitWebhook, CommitInfo }
 
 // 构建期版本/tag 戳记（只读，不造 tag）
 export { agentVersion } from './version'
 
 // dev 期文件行数/体积实时看门狗（CSS 更严，只 warn 不阻断）
-export { agentSizeWatch } from './size-watch'
-export type { AgentSizeWatchOptions } from './size-watch'
+export { agentSizeWatch }
+export type { AgentSizeWatchOptions }
+export { agentProjectGuide, inspectProject }
+export type { AgentProjectGuideOptions, AgentProjectGuideReport }
 export {
   agentGuard,
   createGuardHookScript,
   normalizeGuardConfig,
   renderGuardReport,
   runGuard,
-} from './guard'
+}
 export type {
   AgentGuardChecks,
   AgentGuardLevel,
@@ -30,7 +48,7 @@ export type {
   GuardReportItem,
   GuardResult,
   GuardSeverity,
-} from './guard'
+}
 
 /**
  * vite-plugin-agent-eyes —— 给 AI agent 的自愈遥测层，也提供提交前风险门禁。
@@ -58,6 +76,40 @@ export interface AgentDebuggerOptions {
   maxBytes?: number
   /** 错误时自动截图（通过 CDP），默认 false */
   screenshots?: boolean
+}
+
+/** agentEyes 自动注入客户端埋点配置。默认全部开启，仅 Vite dev 生效。 */
+export interface AgentEyesClientOptions {
+  /** 是否自动向 HTML 注入 `autoInstrument()`，默认 true。 */
+  enabled?: boolean
+  /** 前端上报端点；默认复用 telemetry.endpoint 或 `/dev/log`。 */
+  endpoint?: string
+  /** 是否记录请求/响应体，默认 true。 */
+  logBody?: boolean
+  /** 跳过敏感字段脱敏，默认 false。 */
+  raw?: boolean
+  /** 是否记录路由导航，默认 true。 */
+  nav?: boolean
+  /** 是否记录全局错误和控制台，默认 true。 */
+  errors?: boolean
+  /** 是否记录脱敏交互轨迹，默认 true。 */
+  interactions?: boolean
+}
+
+/** agentEyes 一站式默认开发配置。 */
+export interface AgentEyesOptions {
+  /** 运行时日志收集器配置；传 false 可关闭。默认开启。 */
+  telemetry?: AgentDebuggerOptions | false
+  /** 自动注入客户端 `autoInstrument()`；传 false 可关闭。默认开启。 */
+  client?: AgentEyesClientOptions | false
+  /** dev 期超长文件实时警告；传 false 可关闭。默认开启。 */
+  sizeWatch?: AgentSizeWatchOptions | false
+  /** 项目类型/层级/alias 体检；传 false 可关闭。默认开启。 */
+  projectGuide?: AgentProjectGuideOptions | false
+  /** 默认提交 guard 配置；传 false 可关闭。默认 `{ level: 'block' }`。 */
+  guard?: AgentGuardOptions | false
+  /** git hook 工作流配置；传 false 可关闭默认 guard hook。默认开启 guard-only。 */
+  git?: AgentGitOptions | false
 }
 
 type ApiPayload = {
@@ -95,6 +147,79 @@ type DevLogPayload =
 const HEADER_SEP = '\n\n'
 const MIN_FLUSH_MS = 1
 const MIN_LOG_BYTES = 4096
+const DEFAULT_ENDPOINT = '/dev/log'
+const AGENT_EYES_CLIENT_MARK = 'data-agent-eyes-auto'
+
+function jsonForInlineScript(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c')
+}
+
+function autoInstrumentOptions(options: AgentEyesOptions): AgentEyesClientOptions {
+  const telemetry = options.telemetry === false ? {} : options.telemetry ?? {}
+  const client = options.client === false ? {} : options.client ?? {}
+  return {
+    endpoint: client.endpoint ?? telemetry.endpoint ?? DEFAULT_ENDPOINT,
+    logBody: client.logBody ?? true,
+    raw: client.raw ?? false,
+    nav: client.nav ?? true,
+    errors: client.errors ?? true,
+    interactions: client.interactions ?? true,
+  }
+}
+
+function agentEyesClientPlugin(options: AgentEyesOptions): Plugin {
+  const clientOptions = autoInstrumentOptions(options)
+  return {
+    name: 'vite-plugin-agent-eyes-client-auto',
+    apply: 'serve',
+    transformIndexHtml(html) {
+      if (html.includes(AGENT_EYES_CLIENT_MARK)) return []
+      return [
+        {
+          tag: 'script',
+          attrs: {
+            type: 'module',
+            [AGENT_EYES_CLIENT_MARK]: 'true',
+          },
+          children:
+            `import { autoInstrument } from 'vite-plugin-agent-eyes/client'\n` +
+            `autoInstrument(${jsonForInlineScript(clientOptions)})`,
+          injectTo: 'head-prepend',
+        },
+      ]
+    },
+  }
+}
+
+/**
+ * 一站式开发环境入口：默认打开运行时日志、客户端自动埋点、项目体检、dev size watch 和提交 guard。
+ *
+ * 这是给普通 Vite 项目的推荐入口：`plugins: [...agentEyes()]` 即可获得本地开发视野、项目体检与基础门禁。
+ * 所有子能力都只在 `vite dev` 生效；需要精细控制时仍可使用低层 API。
+ */
+export function agentEyes(options: AgentEyesOptions = {}): Plugin[] {
+  const plugins: Plugin[] = []
+
+  if (options.telemetry !== false) {
+    plugins.push(agentDebugger(options.telemetry ?? {}))
+  }
+  if (options.client !== false && options.client?.enabled !== false) {
+    plugins.push(agentEyesClientPlugin(options))
+  }
+  if (options.sizeWatch !== false) {
+    plugins.push(agentSizeWatch(options.sizeWatch ?? {}))
+  }
+  if (options.projectGuide !== false) {
+    const telemetry = options.telemetry === false ? {} : options.telemetry ?? {}
+    plugins.push(agentProjectGuide({ logDir: telemetry.logDir, ...(options.projectGuide ?? {}) }))
+  }
+  if (options.git !== false) {
+    const guard = options.guard === false ? false : options.guard ?? { level: 'block' }
+    plugins.push(agentGit({ guard, ...(options.git ?? {}) }))
+  }
+
+  return plugins
+}
 
 function warnLine(server: ViteDevServer, message: string) {
   server.config.logger.warn(`\x1b[33m[agent-eyes]\x1b[0m ${message}`)
@@ -359,19 +484,20 @@ class ErrorAggregator {
 
 const MANIFEST = `# Agent 自愈遥测（log/）
 
-> 这些日志是**给 AI agent 读的运行时视野**；提交前 guard 报告在 \`log/guard-report.json\`，给人和 agent 共用。
+> 这些日志是**给 AI agent 读的运行时视野**；项目体检在 \`log/project-guide.json\`，提交前 guard 报告在 \`log/guard-report.json\`，给人和 agent 共用。
 > 由 vite-plugin-agent-eyes 产生，仅本地 dev，**每次启动清空**（只反映本次会话），\`*.log\` 不入库。
 > 若需要完整 agent 操作手册，读包内 \`AGENT_GUIDE.md\`；若要让 Codex/Claude/Gemini/Hermes 主动发现，读 \`AGENT_BOOTSTRAP.md\`；README 面向人类安装和 API 评估。
 
 ## 排查顺序（读日志 → 定位 → 改 → 重启 dev → 再读验证）
 
-1. **errors.log** —— 先看"哪坏了"：顶部是 Top Errors（聚合去重 + 频率），下方是最近原始记录。
-2. **console.log** —— 全级别控制台输出（log/warn/error/info/debug），React dev warning、库 deprecation 警告都在这里。
-3. **interaction.log** —— click/input/change/submit/route 脱敏交互轨迹，用来还原复现路径（表单值只记 <redacted>）。
-4. **api-calls.log** —— 若是接口问题：看真实请求/响应体（别凭类型猜字段）、调用顺序。
-5. **proxy-<host>.log** —— 若是网络/鉴权层：请求带的 Cookie、响应的 Set-Cookie 属性、status。多个代理各自按 target host 分文件。fetch 看不到这层。
-6. **auth-state.json** —— 若要还原已登录 UI：看最近一次登录成功的脱敏账号画像。
-7. **snapshots/** —— 错误时自动截图（PNG）+ DOM 快照（HTML），视觉+结构双重现场。
+1. **../project-guide.json** —— 先看项目类型、API/业务/路由/配置层级和 \`@\` alias 建议，决定从哪下钻。
+2. **errors.log** —— 再看"哪坏了"：顶部是 Top Errors（聚合去重 + 频率），下方是最近原始记录。
+3. **console.log** —— 全级别控制台输出（log/warn/error/info/debug），React dev warning、库 deprecation 警告都在这里。
+4. **interaction.log** —— click/input/change/submit/route 脱敏交互轨迹，用来还原复现路径（表单值只记 <redacted>）。
+5. **api-calls.log** —— 若是接口问题：看真实请求/响应体（别凭类型猜字段）、调用顺序。
+6. **proxy-<host>.log** —— 若是网络/鉴权层：请求带的 Cookie、响应的 Set-Cookie 属性、status。多个代理各自按 target host 分文件。fetch 看不到这层。
+7. **auth-state.json** —— 若要还原已登录 UI：看最近一次登录成功的脱敏账号画像。
+8. **snapshots/** —— 错误时自动截图（PNG）+ DOM 快照（HTML），视觉+结构双重现场。
 
 最新记录在文件**最上方**（header 之后），\`head\` 即看本次会话最近发生了什么。
 errors.log 的 Top Errors 区直接告诉你"哪个错误刷得最凶"，省去自己数频率。
@@ -426,6 +552,7 @@ const ROOT_MANIFEST = `# Agent 遥测日志（按 dev 端口隔离）
 - 你的 dev 端口看 \`cs dev\` / vite 启动输出（如 5175）。
 - 你的日志在 \`log/<你的端口>/\`：\`errors.log\` / \`console.log\` / \`interaction.log\` / \`api-calls.log\` / \`proxy-*.log\` / \`auth-state.json\` / \`snapshots/\`。
 - \`instances.json\` 列出当前在写日志的端口 / 分支 / pid，方便确认你该读哪个。
+- \`project-guide.json\` 是项目结构体检：项目类型、API/业务/路由/配置层级、alias 和建议。
 
 读法见 \`log/<port>/README.md\`。
 `

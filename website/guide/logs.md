@@ -6,15 +6,16 @@
 
 如果你不知道从哪开始，按这个顺序：
 
-1. **`errors.log`** — 最常用。只记 API 失败和前端错误，聚合去重 + 频率计数，顶部是 `Top Errors`。想知道"哪坏了"看这个。
-2. **`api-calls.log`** — 最全。所有 API（成功+失败）+ 路由跳转，带请求/响应体。想知道"刚才那个接口返回了什么"看这个。
-3. **`proxy-<host>.log`** — 网络/鉴权层。fetch 看不到的 `Cookie` / `Set-Cookie` 属性在这里。登录态问题必看。
+1. **`log/project-guide.json`** — 开局体检。看项目类型、API/业务/路由/配置层级、`@` alias 和结构建议，先决定从哪下钻。
+2. **`errors.log`** — 最常用。只记 API 失败和前端错误，聚合去重 + 频率计数，顶部是 `Top Errors`。想知道"哪坏了"看这个。
+3. **`api-calls.log`** — 最全。所有 API（成功+失败）+ 路由跳转，带请求/响应体。想知道"刚才那个接口返回了什么"看这个。
+4. **`proxy-<host>.log`** — 网络/鉴权层。fetch 看不到的 `Cookie` / `Set-Cookie` 属性在这里。登录态问题必看。
 
 其他日志按需翻。
 
 ## 完整清单
 
-运行时日志写进 `log/<port>/`（`*.log` 不入库），每次启动清空，**最新记录在文件最上方**，`head` 即看本次会话。顶层 `log/instances.json` 记录当前端口、分支、进程和启动时间。
+运行时日志写进 `log/<port>/`（`*.log` 不入库），每次启动清空，**最新记录在文件最上方**，`head` 即看本次会话。顶层 `log/instances.json` 记录当前端口、分支、进程和启动时间；`log/project-guide.json` 记录项目体检和规划建议。
 
 | 文件 | 内容 | 何时看 |
 |------|------|--------|
@@ -25,6 +26,7 @@
 | **log/\<port\>/interaction.log** | click/input/change/submit/route 脱敏交互轨迹 | 还原复现路径、定位"人或 agent 做了什么" |
 | **log/\<port\>/snapshots/** | 错误截图（PNG）+ DOM 快照（HTML） | 视觉+结构双重现场 |
 | **log/\<port\>/auth-state.json** | 最近一次登录成功的脱敏账户画像 | 还原 UI、浏览器控制、确认当前账号 |
+| **log/project-guide.json** | 项目结构体检和规划建议 | 判断项目类型、API/业务/路由/配置层级、检查 `@` alias |
 | **log/guard-report.json** | 提交前 guard 的最近一次 JSON 报告 | 看 commit 被阻断或预警的原因 |
 
 ## 怎么验证日志在写
@@ -34,6 +36,7 @@
 ```bash
 # 当前在跑的 dev server 用哪个端口
 cat log/instances.json
+cat log/project-guide.json
 # 输出类似：[{"port":5173,"dir":"log/5173","branch":"main","pid":12345,...}]
 
 # 看本次会话的 API 调用（最新在最上面）

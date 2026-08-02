@@ -20,12 +20,27 @@ npm i -D vite-plugin-agent-eyes
 
 只在 dev 期生效（`apply: 'serve'`），不影响 build 产物，不影响线上体积。React、Vue、Svelte、Solid、原生 JS 都能用——只要你的项目用 Vite，详见[框架无关性](./framework-agnostic)。
 
+## Vite 版本兼容
+
+当前 `peerDependencies` 是 `vite >=4 <9`。仓库 CI 会按主版本矩阵验证：
+
+| Vite 主版本 | 验证版本 |
+|---|---|
+| 4 | `4.5.14` |
+| 5 | `5.4.21` |
+| 6 | `6.4.3` |
+| 7 | `7.3.6` |
+| 8 | `8.2.0` |
+
+兼容验证跑 `typecheck`、单测和构建。未来 Vite 9 出来后先加入矩阵验证，再放开 peer 范围。
+
 ## 进阶：类型提示与配置诊断
 
 装上后，TypeScript 用户会自动获得完整类型（hover 有说明、参数有提示）。除此之外，插件在 dev server 启动时会主动提示常见配置错误：
 
 - `agentDebugger()` 会提示 `endpoint` 没有以 `/` 开头、`flushMs` / `maxBytes` 过小等
 - `agentProxy()` 会提示 target 非 `http(s)`、`flushMs` / `maxBytes` 过小；`extra.configure` 会保留并先执行
+- `agentEyes()` 默认包含 `agentDebugger()`，并会自动注入客户端埋点、启用项目体检、size watch 和提交 guard
 
 也就是说，配置写错了不用等运行时崩溃，启动控制台就会告诉你。
 

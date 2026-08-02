@@ -26,7 +26,7 @@ function configureDebugger(root: string): Middleware {
   let middleware: Middleware | null = null
   const plugin = agentDebugger({ logDir: path.join(root, 'log'), flushMs: 1 })
   if (typeof plugin.configureServer !== 'function') throw new Error('configureServer is not a function')
-  plugin.configureServer({
+  ;(plugin.configureServer as (this: unknown, server: ViteDevServer) => void).call({}, {
     config: {
       root,
       server: { port: 5180 },

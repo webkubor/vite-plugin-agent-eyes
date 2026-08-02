@@ -1,7 +1,7 @@
 ---
 name: agent-eyes
 description: "vite-plugin-agent-eyes 的 agent 使用手册。两块能力：① 自愈遥测——读结构化运行时日志（API/错误/控制台/交互/代理 header）+ 脱敏登录态 + 截图 + DOM 快照，不靠猜代码就诊断修复；② 提交治理——agentGit（去 husky，统一 pre-commit/post-commit + 飞书通知）、agentGuard（提交期硬拦 secret/超长文件/屎山）、agentSizeWatch（dev 期实时警告超长文件）。在 Vite/Astro 项目里配置 agentGit/agentGuard/agentSizeWatch 或排查 guard 拦截/误报时必读。"
-version: 0.12.0
+version: 0.13.0
 ---
 
 # Vite Agent Debugger
@@ -18,21 +18,20 @@ version: 0.12.0
 - 用户提交被 guard 阻断或要求提前规避明显错误 / 屎山信号时，先读 `log/guard-report.json`。
 - 给一个还没接入的 Vite 项目装上这套自愈能力。
 
-## 接入（一次性，3 步）
+## 接入（一次性，默认 1 步）
 
 ```ts
-// 1. vite.config.ts
-import { agentDebugger, agentProxy } from 'vite-plugin-agent-eyes'
+// vite.config.ts
+import { agentEyes, agentProxy } from 'vite-plugin-agent-eyes'
 export default defineConfig({
-  plugins: [agentDebugger({ screenshots: true })],  // screenshots 可选，开启 CDP 截图
+  plugins: [...agentEyes()],  // 默认：日志 + 自动客户端埋点 + 项目体检 + size watch + 提交 guard
   server: { proxy: { '/api': agentProxy('https://your-api.example.com') } },
 })
 ```
-```ts
-// 2. 应用入口文件（main.ts / main.tsx / main.js / index.js 皆可——框架无关）
-```
 
-**推荐：一行自动埋点**，自动包装 fetch/XHR/路由导航/全局错误/全控制台/DOM 快照/脱敏交互轨迹：
+`agentEyes()` 只在 `vite dev` 生效，并会自动向 dev HTML 注入 `autoInstrument()`；普通项目不用再改应用入口。
+
+**如果关闭了自动注入**（`agentEyes({ client: false })`），才需要在应用入口手动加：
 ```ts
 import { autoInstrument } from 'vite-plugin-agent-eyes/client'
 autoInstrument()
@@ -58,12 +57,13 @@ recordLoginSuccess({ userId, email, name, roles, tenantId })
 
 未装包但想临时用：优先用 git / workspace 方式安装本包；不要只拷 `src/index.ts` / `src/client.ts`，它们依赖同目录下的 `cdp`、`git`、`guard-*` 等模块。
 
-## 提交治理：agentGit / agentGuard / agentSizeWatch（配置速查）
+## 提交治理：agentEyes / agentGit / agentGuard / agentSizeWatch（配置速查）
 
-三者职责（钩子由 `apply:'serve'` 插件在 **dev 启动**时装/重写——改了配置或升级版本要跑一次 `pnpm dev` 才生效；Astro 项目加进 `astro.config` 的 `vite.plugins`）：
+这些入口职责（钩子由 `apply:'serve'` 插件在 **dev 启动**时装/重写——改了配置或升级版本要跑一次 `pnpm dev` 才生效；Astro 项目加进 `astro.config` 的 `vite.plugins`）：
 
 | 插件 | 时机 | 作用 |
 |------|------|------|
+| `agentEyes` | dev 启动 | 默认组合入口：日志 + 自动客户端埋点 + 项目体检 + size watch + guard-only git hook |
 | `agentGit` | 提交前/后 | 替代 husky：跑 `precommit` 命令 + 可内嵌 `guard`；提交后飞书通知。自带 rebase/cherry 重放去重 |
 | `agentGuard` | 提交时 | 硬拦 staged：secret/超大文件/超长行数/TODO/any/console.log。**已用 agentGit 就配进 `agentGit({ guard })`，别再单独挂**（争用 pre-commit） |
 | `agentSizeWatch` | dev 写码当下 | 超长文件在控制台 `[agent-eyes:size]` warn，只警告不阻断。专治 AI 堆超长 CSS |
@@ -94,7 +94,8 @@ agentGit({
 ## 自愈闭环（核心，照此执行）
 
 1. **先读 `log/README.md`** —— 项目自描述，确认当前端口日志在哪、各流看什么。
-2. **读 `log/<port>/errors.log`** —— 定位"哪坏了"（最新在最上，`head` 即可）。
+2. **读 `log/project-guide.json`** —— 先看项目类型、API/业务/路由/配置层级和 `@` alias 建议。
+3. **读 `log/<port>/errors.log`** —— 定位"哪坏了"（最新在最上，`head` 即可）。
 3. **按线索下钻**：
    - 复现路径不清 → `log/<port>/interaction.log` 看 click/input/change/submit/route 顺序。
    - 接口/字段问题 → `log/<port>/api-calls.log` 看**真实**请求/响应体（**绝不凭类型猜字段**）。
@@ -128,4 +129,5 @@ log/<port>/proxy-<host>.log: GET .../auth/session → 200 | Cookie(req): 无   �
 | `log/<port>/auth-state.json` | 最近一次登录成功的脱敏账户画像 |
 | `log/<port>/snapshots/err-*.png` | 错误截图（需 CDP，自动检测端口） |
 | `log/<port>/snapshots/dom-*.html` | DOM 快照（始终可用，无需 CDP） |
+| `log/project-guide.json` | 项目类型、API/业务/路由/配置层级、alias 与规划建议 |
 | `log/guard-report.json` | 最近一次提交前 guard JSON 报告 |

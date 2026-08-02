@@ -12,7 +12,7 @@ function configureDebuggerWithWarn(options: Parameters<typeof agentDebugger>[0])
   const warnings: string[] = []
   const plugin = agentDebugger(options)
   if (typeof plugin.configureServer !== 'function') throw new Error('configureServer is not a function')
-  plugin.configureServer({
+  ;(plugin.configureServer as (this: unknown, server: ViteDevServer) => void).call({}, {
     config: {
       root: process.cwd(),
       server: { port: 5190 },

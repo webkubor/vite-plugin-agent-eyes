@@ -2,6 +2,19 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.13.0] - 2026-08-02
+
+### Added
+- 新增 `agentEyes()` 一站式本地开发入口：默认组合 `agentDebugger()`、客户端自动 `autoInstrument()` 注入、`agentProjectGuide()`、`agentSizeWatch()` 和 `agentGit({ guard: { level: 'block' } })`，普通 Vite 项目只需在 `vite.config.ts` 挂一次即可默认打开开发期能力。
+- 新增 `agentProjectGuide()` 项目体检：识别 Vite 前端项目类型、源码目录、API/业务/路由/配置层级和 `@` alias，缺失时写入 `log/project-guide.json` 并在 dev 控制台给建议。
+- 新增 dev HTML 自动埋点注入插件，`agentEyes()` 会向 HTML 注入 `autoInstrument()`，不再要求普通项目手动修改 `main.tsx/main.ts`；可通过 `agentEyes({ client: false })` 关闭。
+- 新增 `agentEyes` 测试，覆盖默认能力组合、显式关闭和自动注入脚本。
+- 新增 Vite 兼容矩阵 CI：对 `vite@4.5.14`、`5.4.21`、`6.4.3`、`7.3.6`、`8.2.0` 分别运行 typecheck、单测和构建；`peerDependencies` 收敛为 `vite >=4 <9`。
+
+### Changed
+- README、文档站 Quickstart、插件组合页、API 参考、`SKILL.md`、`AGENT_GUIDE.md` 和 `AGENT_BOOTSTRAP.md` 均改为优先推荐 `agentEyes()`；底层 `agentDebugger()` / `autoInstrument()` / `agentGit()` 仍保留给精细配置。
+- README 和文档站恢复统一 Agent Eyes 品牌资产：banner、logo、favicon 和分享图不再使用 Vite 官方 logo。
+
 ## [0.12.0] - 2026-06-29
 
 ### Added
@@ -182,7 +195,8 @@
 - 三类结构化日志：`api-calls.log` / `errors.log` / `proxy.log`
 - 招牌功能：本地 http 上游 `Set-Cookie` 改写（去 `Domain` / 剥 `Secure` / `SameSite=None → Lax`），解决「登录成功却一直 401」
 
-[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.4...HEAD
+[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.4...v0.13.0
 [0.10.4]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.1...v0.10.2

@@ -28,7 +28,7 @@ Before guessing from source code on frontend, API, auth, cookie, CORS, routing, 
 1. Read `node_modules/vite-plugin-agent-eyes/AGENT_GUIDE.md` if it exists.
 2. Read `log/README.md`, then `log/instances.json`, then the active `log/<port>/README.md`.
 3. Use logs in this order: `errors.log`, `interaction.log`, `api-calls.log`, `proxy-<host>.log`, `auth-state.json`, `snapshots/`, `guard-report.json`.
-4. If logs are missing, check whether `agentDebugger()`, `autoInstrument()`, and relevant `agentProxy()` / `agentGuard()` setup exists before diagnosing the app.
+4. If logs are missing, first check whether `agentEyes()` is configured. If not, check whether `agentDebugger()`, `autoInstrument()`, and relevant `agentProxy()` / `agentGuard()` setup exists before diagnosing the app.
 5. After changing Vite plugin config, restart the dev server and verify by reproducing the user action and rereading fresh logs.
 
 Never ask for or save tokens, cookies, Authorization headers, or refresh tokens. `auth-state.json` is only a sanitized account hint.

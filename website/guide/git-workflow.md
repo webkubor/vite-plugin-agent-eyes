@@ -3,11 +3,11 @@
 让**任意 Vite 项目零配置**获得「提交前检查 + 提交后通知」——装上插件、跑一次 `vite dev`，git 钩子自动就位，无需各项目再配 husky / `.git/hooks`。
 
 ```ts
-import { agentDebugger, agentGit } from 'vite-plugin-agent-eyes'
+import { agentEyes, agentGit } from 'vite-plugin-agent-eyes'
 
 export default defineConfig({
   plugins: [
-    agentDebugger(),
+    ...agentEyes({ git: false }),
     agentGit({
       precommit: ['pnpm typecheck', 'pnpm lint'],        // 任一非零退出即阻断提交
       webhook: {                                          // 单个 webhook

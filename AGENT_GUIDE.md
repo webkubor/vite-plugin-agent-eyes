@@ -9,7 +9,7 @@ To make Codex, Claude, Gemini, or Hermes discover this guide automatically, read
 Codex, Claude Code, Gemini CLI, Hermes agent, and generic local coding agents can all use this tool because the runtime output is plain files:
 
 - Markdown: `log/README.md`, `log/<port>/README.md`
-- JSON: `log/instances.json`, `log/guard-report.json`, `log/<port>/auth-state.json`
+- JSON: `log/instances.json`, `log/project-guide.json`, `log/guard-report.json`, `log/<port>/auth-state.json`
 - Text logs: `errors.log`, `interaction.log`, `api-calls.log`, `console.log`, `proxy-<host>.log`
 - Visual artifacts: `snapshots/*.png`, `snapshots/*.html`
 
@@ -26,10 +26,10 @@ Use these logs before guessing from source code when the user reports:
 
 ## Required Setup Check
 
-1. Confirm the project uses `agentDebugger()` in `vite.config.*`.
-2. Confirm the app entry calls `autoInstrument()` from `vite-plugin-agent-eyes/client`.
+1. First check whether the project uses `agentEyes()` in `vite.config.*`. If yes, runtime logging, client `autoInstrument()`, project guide, size watch, and default guard are already enabled for `vite dev`.
+2. If the project does not use `agentEyes()`, confirm it uses `agentDebugger()` in `vite.config.*` and that the app entry calls `autoInstrument()` from `vite-plugin-agent-eyes/client`.
 3. If API/auth/cookie debugging is needed, confirm the Vite proxy uses `agentProxy(target)`.
-4. If pre-commit risk checks are needed, confirm `agentGuard()` or `agentGit({ guard })` is configured.
+4. If pre-commit risk checks are needed and `agentEyes()` is not present, confirm `agentGuard()` or `agentGit({ guard })` is configured.
 
 If setup is missing, add the smallest missing integration, restart the dev server, reproduce the issue, then read the logs again.
 
@@ -39,7 +39,8 @@ After the dev server starts, read:
 
 1. `log/README.md` for the current generated instructions.
 2. `log/instances.json` to identify the active dev port.
-3. `log/<port>/README.md` for the port-specific log map.
+3. `log/project-guide.json` for project type, layer, route/API/config, and alias suggestions.
+4. `log/<port>/README.md` for the port-specific log map.
 
 Do not read stale logs from a different port. Logs are recreated on each dev-server start.
 
@@ -73,6 +74,7 @@ Do not read stale logs from a different port. Logs are recreated on each dev-ser
 ```bash
 ls log
 cat log/instances.json
+cat log/project-guide.json
 head -80 log/<port>/errors.log
 head -80 log/<port>/interaction.log
 head -120 log/<port>/api-calls.log

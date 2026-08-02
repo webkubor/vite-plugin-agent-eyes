@@ -1,5 +1,10 @@
 import { defineConfig } from 'vitepress'
 
+const agentEyesLogo =
+  'https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/vite-plugin-agent-eyes/cs-token4ai-1784193576898095000.png'
+const agentEyesBanner =
+  'https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/vite-plugin-agent-eyes-banner/cs-token4ai-1784197717786638000.png'
+
 // GitHub Pages 部署在 https://webkubor.github.io/vite-plugin-agent-eyes/
 // 必须设 base 为仓库子路径，否则静态资源 404
 export default defineConfig({
@@ -11,8 +16,10 @@ export default defineConfig({
   lastUpdated: true,
 
   head: [
-    ['meta', { name: 'theme-color', content: '#646cff' }],
-    ['link', { rel: 'icon', href: 'https://vitejs.dev/logo.svg', type: 'image/svg+xml' }],
+    ['meta', { name: 'theme-color', content: '#39d353' }],
+    ['meta', { property: 'og:image', content: agentEyesBanner }],
+    ['meta', { name: 'twitter:image', content: agentEyesBanner }],
+    ['link', { rel: 'icon', href: agentEyesLogo, type: 'image/png' }],
   ],
 
   themeConfig: {
@@ -20,14 +27,14 @@ export default defineConfig({
 
     nav: [
       { text: '指南', link: '/guide/why', activeMatch: '/guide/' },
-      { text: 'API', link: '/api/agent-debugger', activeMatch: '/api/' },
+      { text: 'API', link: '/api/agent-eyes', activeMatch: '/api/' },
       {
         text: '资源',
         items: [
           { text: 'npm 包', link: 'https://www.npmjs.com/package/vite-plugin-agent-eyes' },
           { text: 'GitHub', link: 'https://github.com/webkubor/vite-plugin-agent-eyes' },
           { text: '更新日志', link: 'https://github.com/webkubor/vite-plugin-agent-eyes/releases' },
-          { text: 'Agent 手册', link: 'https://github.com/webkubor/vite-plugin-agent-eyes/blob/master/AGENT_GUIDE.md' },
+          { text: 'Agent 手册', link: 'https://github.com/webkubor/vite-plugin-agent-eyes/blob/main/AGENT_GUIDE.md' },
         ],
       },
     ],
@@ -83,7 +90,9 @@ export default defineConfig({
         {
           text: '服务端 API',
           items: [
+            { text: 'agentEyes()', link: '/api/agent-eyes' },
             { text: 'agentDebugger()', link: '/api/agent-debugger' },
+            { text: 'agentProjectGuide()', link: '/api/agent-project-guide' },
             { text: 'agentProxy()', link: '/api/agent-proxy' },
             { text: 'agentGit()', link: '/api/agent-git' },
             { text: 'agentGuard()', link: '/api/agent-guard' },

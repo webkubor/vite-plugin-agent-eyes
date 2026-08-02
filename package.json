@@ -1,6 +1,6 @@
 {
   "name": "vite-plugin-agent-eyes",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "给 AI agent 的自愈遥测层：结构化运行时日志（API/错误/交互/代理 header）+ 本地 cookie 修复 + 登录态画像 + 提交前风险门禁。Agent-readable runtime telemetry, interaction traces, auth profile hints, and pre-commit guard for Vite dev.",
   "type": "module",
   "license": "MIT",
@@ -46,11 +46,12 @@
     "build": "tsup src/index.ts src/client.ts --format esm --dts --clean",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
+    "compat": "npm run typecheck && npm test && npm run build",
     "build:tmp": "tsup src/index.ts src/client.ts --format esm --dts --clean --out-dir .tmp/vite-plugin-agent-eyes-build",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
-    "vite": ">=4"
+    "vite": ">=4 <9"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

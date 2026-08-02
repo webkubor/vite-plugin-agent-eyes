@@ -65,10 +65,10 @@ log/<port>/proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req)
 
 ```ts
 import { defineConfig } from 'vite'
-import { agentDebugger, agentProxy } from 'vite-plugin-agent-eyes'
+import { agentEyes, agentProxy } from 'vite-plugin-agent-eyes'
 
 export default defineConfig({
-  plugins: [agentDebugger()],
+  plugins: [...agentEyes()],
   server: {
     proxy: {
       // 默认就开启 cookie 修复，不用额外配置

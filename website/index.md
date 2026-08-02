@@ -6,15 +6,15 @@ hero:
   text: 让你和 AI agent 都看清浏览器里发生了什么
   tagline: 把 fetch 看不到的 cookie、转瞬即逝的错误、对不上的接口字段，全部落成结构化日志。还有本地 cookie 修复和提交前风险门禁。
   image:
-    src: https://vitejs.dev/logo.svg
-    alt: Vite
+    src: https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/vite-plugin-agent-eyes/cs-token4ai-1784193576898095000.png
+    alt: Agent Eyes
   actions:
     - theme: brand
       text: 开始使用
       link: /guide/why
     - theme: alt
       text: API 参考
-      link: /api/agent-debugger
+      link: /api/agent-eyes
     - theme: alt
       text: GitHub
       link: https://github.com/webkubor/vite-plugin-agent-eyes
@@ -52,6 +52,6 @@ features:
     details: 纯 Vite 插件 + 浏览器原生 API。React、Vue、Svelte、Solid、原生 JS 都能用。
   - icon: 🤖
     title: Agent 原生
-    details: 一键自动埋点 autoInstrument()，覆盖 fetch/XHR/导航/错误/控制台/快照/交互，幂等防 HMR 重复包装。
-    link: /api/auto-instrument
+    details: 一站式 agentEyes() 默认打开运行时日志、自动埋点、项目体检、Size Watch 和提交 Guard；需要时再拆底层 API。
+    link: /api/agent-eyes
 ---

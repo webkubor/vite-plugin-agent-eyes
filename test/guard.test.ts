@@ -50,7 +50,7 @@ function fakeServer(root: string): ViteDevServer {
 function configureGuard(root: string): void {
   const plugin = agentGuard({ level: 'warn' })
   if (typeof plugin.configureServer !== 'function') throw new Error('configureServer is not a function')
-  plugin.configureServer(fakeServer(root))
+  ;(plugin.configureServer as (this: unknown, server: ViteDevServer) => void).call({}, fakeServer(root))
 }
 
 describe('normalizeGuardConfig', () => {

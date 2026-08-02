@@ -1,0 +1,44 @@
+name: Vite Compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vite:
+    name: Vite ${{ matrix.vite }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        vite:
+          - 4.5.14
+          - 5.4.21
+          - 6.4.3
+          - 7.3.6
+          - 8.2.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm install --package-lock=false
+
+      - name: Install Vite ${{ matrix.vite }}
+        run: npm install --package-lock=false --no-save vite@${{ matrix.vite }}
+
+      - name: Verify resolved Vite
+        run: node -e "console.log(require('vite/package.json').version)"
+
+      - name: Run compatibility checks
+        run: npm run compat

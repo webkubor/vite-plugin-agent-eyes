@@ -7,10 +7,10 @@
 ```ts
 // vite.config.ts
 import { defineConfig } from 'vite'
-import { agentDebugger, agentProxy } from 'vite-plugin-agent-eyes'  // agentDebugger 必需
+import { agentEyes, agentProxy } from 'vite-plugin-agent-eyes'
 
 export default defineConfig({
-  plugins: [agentDebugger()],  // 必需：agentProxy 的日志靠它落盘
+  plugins: [...agentEyes()],  // agentProxy 的日志会和 agentEyes 日志归到同一端口目录
   server: {
     proxy: {
       '/api': agentProxy('https://your-api.example.com'),  // 必需：target + 本地 cookie 修复

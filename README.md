@@ -1,6 +1,11 @@
 <div align="center">
 
-<img src="https://vitejs.dev/logo.svg" alt="Vite" width="64" height="64" />
+<img src="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/vite-plugin-agent-eyes-banner/cs-token4ai-1784197717786638000.png" alt="Agent Eyes banner" width="100%" />
+
+<br />
+<br />
+
+<img src="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/vite-plugin-agent-eyes/cs-token4ai-1784193576898095000.png" alt="Agent Eyes logo" width="88" height="88" />
 
 # vite-plugin-agent-eyes
 
@@ -39,7 +44,7 @@
 
 ## 类型提示与配置诊断
 
-- 包内发布 `dist/*.d.ts`，`agentDebugger()`、`agentProxy()`、`autoInstrument()`、`recordLoginSuccess()`、`recordInteraction()` 等入口都有 TypeScript 类型和 hover 说明。
+- 包内发布 `dist/*.d.ts`，`agentEyes()`、`agentDebugger()`、`agentProxy()`、`autoInstrument()`、`recordLoginSuccess()`、`recordInteraction()` 等入口都有 TypeScript 类型和 hover 说明。
 - `agentDebugger()` 会在 dev server 启动时提示常见配置错误，例如 `endpoint` 没有以 `/` 开头、`flushMs` / `maxBytes` 过小。
 - `agentProxy()` 会在 Vite 配置加载时提示 target 非 `http(s)`、`flushMs` / `maxBytes` 过小；`extra.configure` 会保留并先执行。
 
@@ -51,16 +56,32 @@ pnpm add -D vite-plugin-agent-eyes
 npm i -D vite-plugin-agent-eyes
 ```
 
+## Vite 版本兼容
+
+`peerDependencies` 支持 `vite >=4 <9`。CI 会按矩阵验证当前主线：
+
+| Vite 主版本 | 验证版本 |
+|------|------|
+| 4 | `4.5.14` |
+| 5 | `5.4.21` |
+| 6 | `6.4.3` |
+| 7 | `7.3.6` |
+| 8 | `8.2.0` |
+
+本包只依赖稳定的 Vite dev server 插件接口（`configureServer`、`transformIndexHtml`、`handleHotUpdate`、`server.proxy`），所以按主版本矩阵做兼容验证。未来 Vite 9 出来后先加矩阵跑通，再放开 peer 范围。
+
 ## 用法
 
-### 1. 服务端（`vite.config.ts`）
+### 1. 默认全开（`vite.config.ts`）
 
 ```ts
 import { defineConfig } from 'vite'
-import { agentDebugger, agentProxy } from 'vite-plugin-agent-eyes'
+import { agentEyes, agentProxy } from 'vite-plugin-agent-eyes'
 
 export default defineConfig({
-  plugins: [agentDebugger()],
+  plugins: [
+    ...agentEyes(), // 运行时日志 + 自动客户端埋点 + 项目体检 + size watch + 提交 guard
+  ],
   server: {
     proxy: {
       '/api': agentProxy('https://your-api.example.com'),  // log/<port>/proxy-<host>.log + 本地 cookie 修复
@@ -69,16 +90,28 @@ export default defineConfig({
 })
 ```
 
+`agentEyes()` 只在 `vite dev` 生效。它会自动向 dev HTML 注入 `autoInstrument()`，所以普通项目不再需要手动改 `main.tsx/main.ts`。没有后端代理时可以先不配 `agentProxy()`。
+
+如果要逐项关闭：
+
+```ts
+agentEyes({
+  client: false,     // 不自动注入 autoInstrument()
+  sizeWatch: false,  // 不提示超长文件
+  git: false,        // 不安装默认 guard hook
+})
+```
+
 ### 1.5 Git workflow：提交前命令 + 提交后 webhook（0.4.0+，可选）
 
 让**任意 Vite 项目零配置**获得「提交前检查 + 提交后通知」——装上插件、跑一次 `vite dev`，git 钩子自动就位，无需各项目再配 husky / `.git/hooks`。
 
 ```ts
-import { agentDebugger, agentGit } from 'vite-plugin-agent-eyes'
+import { agentEyes, agentGit } from 'vite-plugin-agent-eyes'
 
 export default defineConfig({
   plugins: [
-    agentDebugger(),
+    ...agentEyes({ git: false }),
     agentGit({
       precommit: ['pnpm typecheck', 'pnpm lint'],        // 任一非零退出即阻断提交
       webhook: {                                          // 单个 webhook
@@ -218,7 +251,9 @@ export default defineConfig({
 
 ### 2. 客户端（你的应用入口文件）
 
-**推荐：一行自动埋点**（0.2.0+）——自动包装 `fetch` / `XMLHttpRequest` / 路由导航 / 全局错误 / 全控制台 / DOM 快照；0.10.0+ 默认记录 click/input/change/submit/route 脱敏交互轨迹，无需逐个拦截器手动埋点：
+如果用了 `agentEyes()`，这一步已经自动完成；下面只适用于你关闭了 `client` 自动注入，或选择继续用底层 `agentDebugger()`。
+
+**手动一行自动埋点**（0.2.0+）——自动包装 `fetch` / `XMLHttpRequest` / 路由导航 / 全局错误 / 全控制台 / DOM 快照；0.10.0+ 默认记录 click/input/change/submit/route 脱敏交互轨迹，无需逐个拦截器手动埋点：
 
 ```ts
 import { autoInstrument } from 'vite-plugin-agent-eyes/client'
@@ -271,7 +306,7 @@ recordInteraction('click', buttonElement)
 
 ## 日志与报告
 
-运行时日志写进 `log/<port>/`（`*.log` 不入库），每次启动清空，**最新记录在文件最上方**，`head` 即看本次会话。顶层 `log/instances.json` 记录当前端口、分支、进程和启动时间。
+运行时日志写进 `log/<port>/`（`*.log` 不入库），每次启动清空，**最新记录在文件最上方**，`head` 即看本次会话。顶层 `log/instances.json` 记录当前端口、分支、进程和启动时间；`log/project-guide.json` 记录项目类型、API/业务/路由/配置层级和 alias 建议。
 
 | 文件 | 内容 | 何时看 |
 |------|------|--------|
@@ -282,6 +317,7 @@ recordInteraction('click', buttonElement)
 | **log/\<port\>/proxy-\<host\>.log** | 代理层 `Cookie` / `Set-Cookie` 属性 / status | 网络/鉴权层（fetch 看不到） |
 | **log/\<port\>/snapshots/** | 错误截图（PNG）+ DOM 快照（HTML） | 视觉+结构双重现场 |
 | **log/\<port\>/auth-state.json** | 最近一次登录成功的脱敏账户画像 | 还原 UI、浏览器控制、确认当前账号 |
+| **log/project-guide.json** | 项目结构体检和规划建议 | 开局判断 API/业务/路由/配置层级、检查 `@` alias |
 | **log/guard-report.json** | 提交前 guard 的最近一次 JSON 报告 | 看 commit 被阻断或预警的原因 |
 
 `log/README.md` 是给 agent 的自描述入口（启动时自动生成）。`errors.log` 顶部是 `Top Errors`（按频率降序），省去 agent 自己数频率。
@@ -325,6 +361,19 @@ log/<port>/proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req)
 
 ## API
 
+### `agentEyes(options?): Plugin[]`
+
+默认开发入口。返回一组 Vite 插件，推荐用 `plugins: [...agentEyes()]`。
+
+| 选项 | 默认 | 说明 |
+|------|------|------|
+| `telemetry` | `{}` | 传给 `agentDebugger()`；`false` 关闭运行时日志服务端 |
+| `client` | `{}` | 自动向 dev HTML 注入 `autoInstrument()`；`false` 关闭 |
+| `sizeWatch` | `{}` | 传给 `agentSizeWatch()`；`false` 关闭 dev 超长文件提醒 |
+| `projectGuide` | `{}` | 传给 `agentProjectGuide()`；`false` 关闭项目类型/层级/alias 体检 |
+| `guard` | `{ level: 'block' }` | 默认提交 guard；`false` 关闭 |
+| `git` | `{ guard }` | 传给 `agentGit()`；`false` 关闭默认 git hook |
+
 ### `agentDebugger(options?): Plugin`
 
 | 选项 | 默认 | 说明 |
@@ -346,6 +395,18 @@ log/<port>/proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req)
 | `extra` | — | 透传给 vite `ProxyOptions` 的额外字段 |
 
 > 多个代理各自按 target host 分文件（`proxy-api.example.com.log`、`proxy-admin.example.com.log`），互不覆盖。
+
+### `agentProjectGuide(options?): Plugin`
+
+| 选项 | 默认 | 说明 |
+|------|------|------|
+| `enabled` | `true` | 是否启用项目体检 |
+| `logDir` | `'log'` | 报告输出目录，写入 `log/project-guide.json` |
+| `sourceDir` | 自动识别 `src` / `app` | 指定源码目录 |
+| `alias` | `'@'` | 检查 Vite 与 tsconfig/jsconfig 是否配置快捷 alias |
+| `warn` | `true` | 是否在 dev 控制台输出建议摘要 |
+
+> 检查项目类型、API/业务/路由/配置层级和 `@` alias，只给建议不阻断启动。
 
 ### `agentGit(options?): Plugin`
 

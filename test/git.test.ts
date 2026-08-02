@@ -61,7 +61,7 @@ function shellQuote(value: string): string {
 function configureGit(root: string, options: Parameters<typeof agentGit>[0], warnings: string[] = []): void {
   const plugin = agentGit(options)
   if (typeof plugin.configureServer !== 'function') throw new Error('configureServer is not a function')
-  plugin.configureServer({
+  ;(plugin.configureServer as (this: unknown, server: ViteDevServer) => void).call({}, {
     config: {
       root,
       logger: {

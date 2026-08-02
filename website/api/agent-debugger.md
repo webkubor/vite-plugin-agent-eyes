@@ -1,16 +1,16 @@
 # agentDebugger()
 
-**服务端 Vite 插件，整个插件的必需核心入口。** 它在 dev server 上挂一个接收端点，把前端 `autoInstrument()` / 手动埋点上报的运行时信号（API、错误、控制台、交互、登录态）结构化落盘到 `log/<port>/`，供 agent 不读代码就能定位问题。
+**服务端 Vite 插件，运行时日志收集的底层入口。** 普通项目优先用 [agentEyes()](./agent-eyes)，它会默认组合 `agentDebugger()` 并自动注入客户端埋点。需要精细控制日志服务端时，再单独使用本 API。
 
 ## 最小示例
 
 ```ts
 // vite.config.ts
 import { defineConfig } from 'vite'
-import { agentDebugger } from 'vite-plugin-agent-eyes'  // 必需
+import { agentDebugger } from 'vite-plugin-agent-eyes'
 
 export default defineConfig({
-  plugins: [agentDebugger()],  // 必需：一行挂上日志收集器
+  plugins: [agentDebugger()],
   // agentDebugger({ screenshots: true })  // 可选：开启错误截图，需配合 CDP Chrome
 })
 ```
@@ -19,7 +19,7 @@ export default defineConfig({
 
 ## 何时用
 
-任何想用 `vite-plugin-agent-eyes` 的项目都要挂这个插件。它是日志收集器：客户端的 `autoInstrument()`（自动埋点）和 `logApiCall` / `logConsoleEntry` / `recordLoginSuccess` 等（手动埋点）所有上报，都通过它写入磁盘。不挂它，客户端函数的上报会发到不存在的端点，什么日志都不会产生。
+它是日志收集器：客户端的 `autoInstrument()`（自动埋点）和 `logApiCall` / `logConsoleEntry` / `recordLoginSuccess` 等（手动埋点）所有上报，都通过它写入磁盘。不挂 `agentEyes()` 或 `agentDebugger()`，客户端函数的上报会发到不存在的端点，什么日志都不会产生。
 
 它还负责启动期的配置诊断：`endpoint` 没以 `/` 开头、`flushMs` / `maxBytes` 过小都会在 dev server 启动时提示。
 
@@ -42,6 +42,7 @@ export default defineConfig({
 
 ## 下一步
 
-- [../guide/quickstart](../guide/quickstart) — 从零接入：装插件 + 一行埋点 + 看到第一条日志
+- [./agent-eyes](./agent-eyes) — 推荐的一站式默认入口
+- [../guide/quickstart](../guide/quickstart) — 从零接入：装插件 + 看到第一条日志
 - [../guide/logs](../guide/logs) — 各日志文件内容、何时看、怎么读
 - [./auto-instrument](./auto-instrument) — 配套的客户端自动埋点函数

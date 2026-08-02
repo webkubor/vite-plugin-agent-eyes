@@ -1,57 +1,85 @@
 # 插件怎么搭配
 
-这个包里有 5 个插件函数，看着有点多。这页告诉你它们各自的职责、怎么组合、以及最容易踩的坑。
+这个包里有一个推荐入口 `agentEyes()`，以及一组底层插件函数。普通项目优先用 `agentEyes()`，需要精细控制时再拆开组合。
 
-## 5 个插件一览
+## 默认入口
 
-| 插件 | 类型 | 职责 | 必需吗 |
+| 入口 | 类型 | 默认打开什么 |
+|---|---|---|
+| `agentEyes()` | 服务端 | 运行时日志 + 客户端自动埋点 + 项目结构体检 + dev 超长文件提醒 + 提交 guard |
+
+`agentEyes()` 只在 `vite dev` 生效，并会自动向 HTML 注入 `autoInstrument()`，同时写出 `log/project-guide.json` 供 agent 规划 API/业务/路由/配置层级。没有特殊需求时，这就是唯一需要记住的入口。
+
+```ts
+import { defineConfig } from 'vite'
+import { agentEyes } from 'vite-plugin-agent-eyes'
+
+export default defineConfig({
+  plugins: [...agentEyes()],
+})
+```
+
+## 底层能力一览
+
+| 插件/函数 | 类型 | 职责 | 何时单独用 |
 |---|---|---|---|
 | `agentDebugger()` | 服务端 | 收前端上报的日志并落盘 | **核心，必需** |
 | `agentProxy()` | 服务端 | 包装 Vite proxy，记录 cookie + 修复本地 cookie | 有后端代理时用 |
-| `autoInstrument()` | 客户端 | 一行自动埋点所有运行时信号 | 推荐必需 |
-| `agentGit()` | 服务端 | 提交前命令 + 提交后 webhook 通知 | 可选 |
-| `agentGuard()` | 服务端 | 提交前风险门禁（密钥/大文件/屎山信号） | 可选 |
-| `agentSizeWatch()` | 服务端 | dev 期文件超长实时警告 | 可选 |
+| `autoInstrument()` | 客户端 | 一行自动埋点所有运行时信号 | 关闭自动注入后手动控制 |
+| `agentGit()` | 服务端 | 提交前命令 + 提交后 webhook 通知 | 需要 precommit 命令或 webhook |
+| `agentGuard()` | 服务端 | 提交前风险门禁（密钥/大文件/屎山信号） | 不用 agentGit 时单独装 guard |
+| `agentSizeWatch()` | 服务端 | dev 期文件超长实时警告 | 自定义阈值或单独使用 |
 
 ::: tip 服务端 vs 客户端
-服务端插件（`agentDebugger`/`agentProxy`/`agentGit`/`agentGuard`/`agentSizeWatch`）配在 `vite.config.ts` 的 `plugins` 里。客户端函数（`autoInstrument` 及其他手动函数）在你应用入口调用。
+服务端插件（`agentEyes`/`agentDebugger`/`agentProxy`/`agentGit`/`agentGuard`/`agentSizeWatch`）配在 `vite.config.ts` 的 `plugins` 里。用了 `agentEyes()` 时客户端埋点会自动注入；只有关闭自动注入后，才需要在应用入口手动调用 `autoInstrument()`。
 :::
 
 ## 三个推荐组合
 
-### 组合 1：最小可用（只想看运行时日志）
+### 组合 1：默认全开（推荐）
+
+适合：多数本地开发项目，尤其是 AI agent 会参与调试和提交。
+
+```ts
+import { defineConfig } from 'vite'
+import { agentEyes, agentProxy } from 'vite-plugin-agent-eyes'
+
+export default defineConfig({
+  plugins: [...agentEyes()],
+  server: {
+    proxy: {
+      '/api': agentProxy('https://your-api.example.com'),
+    },
+  },
+})
+```
+
+### 组合 2：只想看运行时日志
 
 适合：先试试这东西有没有用、或者项目还没到要门禁的阶段。
 
 ```ts
 // vite.config.ts
-import { agentDebugger } from 'vite-plugin-agent-eyes'
+import { agentEyes } from 'vite-plugin-agent-eyes'
 
 export default defineConfig({
-  plugins: [agentDebugger()],
+  plugins: [...agentEyes({ sizeWatch: false, git: false })],
 })
-```
-
-```ts
-// 应用入口（如 main.tsx）
-import { autoInstrument } from 'vite-plugin-agent-eyes/client'
-autoInstrument()
 ```
 
 跑起来你就有完整的 API/错误/控制台/交互日志了。
 
-### 组合 2：完整观测 + 提交门禁（推荐）
+### 组合 3：完整观测 + 自定义提交命令
 
 适合：日常开发 + AI agent 协作，想在 commit 前拦低级错误。
 
 ```ts
 // vite.config.ts
-import { agentDebugger, agentProxy, agentGit } from 'vite-plugin-agent-eyes'
+import { agentEyes, agentProxy, agentGit } from 'vite-plugin-agent-eyes'
 
 export default defineConfig({
   plugins: [
-    agentDebugger(),
-    agentSizeWatch(),  // 写代码当下就警告超长文件
+    ...agentEyes({ git: false }),
     agentGit({
       guard: { level: 'block' },  // 提交前风险门禁（直接配进 agentGit，别再单独挂 agentGuard）
       precommit: ['pnpm typecheck', 'pnpm lint'],
@@ -62,30 +90,6 @@ export default defineConfig({
     proxy: {
       '/api': agentProxy('https://your-api.example.com'),
     },
-  },
-})
-```
-
-```ts
-// 应用入口
-import { autoInstrument } from 'vite-plugin-agent-eyes/client'
-autoInstrument()
-```
-
-### 组合 3：全家桶（含截图）
-
-适合：调试视觉问题、白屏、样式错乱，需要截图现场。
-
-```ts
-// vite.config.ts
-export default defineConfig({
-  plugins: [
-    agentDebugger({ screenshots: true }),  // 开截图（需 Chrome 带 remote-debugging）
-    agentSizeWatch(),
-    agentGit({ guard: { level: 'block' } }),
-  ],
-  server: {
-    proxy: { '/api': agentProxy('https://your-api.example.com') },
   },
 })
 ```
