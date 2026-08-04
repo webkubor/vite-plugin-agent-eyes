@@ -64,6 +64,20 @@ function readJsonFile(root: string, rel: string): Record<string, unknown> | null
   }
 }
 
+/** tsconfig 属 JSONC（允许注释/尾逗号），严格 JSON.parse 会整文件判空 —— 剥掉再解析。 */
+function readJsoncFile(root: string, rel: string): Record<string, unknown> | null {
+  try {
+    const raw = fs.readFileSync(path.join(root, rel), 'utf8')
+    const noComments = raw
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:"'])\/\/[^\n]*/g, '$1')
+    const noTrailingCommas = noComments.replace(/,\s*([}\]])/g, '$1')
+    return JSON.parse(noTrailingCommas) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
 function packageManager(root: string): string | null {
   if (exists(root, 'pnpm-lock.yaml')) return 'pnpm'
   if (exists(root, 'package-lock.json')) return 'npm'
@@ -98,20 +112,58 @@ function findLayerDirs(root: string, sourceDir: string, names: string[]): string
     .filter((rel) => exists(root, rel))
 }
 
-function hasAliasInTsConfig(root: string, configFile: string | null, alias: string): boolean {
+/**
+ * tsconfig 里找 alias paths。工程常见形态是根 tsconfig 只做 project references
+ * （`files: []` + `references: [...]`，paths 藏在 tsconfig.app.json）——必须跟着
+ * references / extends 链查下去，只读根文件会稳定误报「未配 alias」。
+ */
+function hasAliasInTsConfig(root: string, configFile: string | null, alias: string, visited = new Set<string>()): boolean {
   if (!configFile) return false
-  const config = readJsonFile(root, configFile)
-  const compilerOptions = config?.compilerOptions
-  if (!compilerOptions || typeof compilerOptions !== 'object') return false
-  const paths = (compilerOptions as { paths?: unknown }).paths
-  return Boolean(paths && typeof paths === 'object' && Object.keys(paths).some((key) => key.startsWith(`${alias}/`)))
+  const normalized = path.normalize(configFile)
+  if (visited.has(normalized) || visited.size > 20) return false
+  visited.add(normalized)
+  const config = readJsoncFile(root, normalized)
+  if (!config) return false
+  const compilerOptions = config.compilerOptions
+  if (compilerOptions && typeof compilerOptions === 'object') {
+    const paths = (compilerOptions as { paths?: unknown }).paths
+    if (paths && typeof paths === 'object' && Object.keys(paths).some((key) => key.startsWith(`${alias}/`))) return true
+  }
+  const followups: string[] = []
+  const references = config.references
+  if (Array.isArray(references)) {
+    for (const ref of references) {
+      const refPath = (ref as { path?: unknown })?.path
+      if (typeof refPath === 'string') followups.push(refPath)
+    }
+  }
+  // extends 只跟相对路径（包名形式的共享配置不在项目内，读不到也没必要）
+  if (typeof config.extends === 'string' && config.extends.startsWith('.')) followups.push(config.extends)
+  const baseDir = path.dirname(normalized)
+  return followups.some((rel) => {
+    let target = path.normalize(path.join(baseDir, rel))
+    const abs = path.join(root, target)
+    // references.path / extends 允许指向目录（隐含其下 tsconfig.json）或省略 .json 后缀
+    if (fs.existsSync(abs) && fs.statSync(abs).isDirectory()) target = path.join(target, 'tsconfig.json')
+    else if (!target.endsWith('.json')) target = `${target}.json`
+    return hasAliasInTsConfig(root, target, alias, visited)
+  })
 }
 
+/**
+ * vite 配置文本兜底扫描（inspectProject 脱离 vite 单独调用时用）。
+ * alias 多行对象写法（`alias: {\n  '@': ... }`）是主流，匹配必须跨行。
+ */
 function hasAliasInViteConfig(root: string, configFile: string | null, alias: string): boolean {
   if (!configFile) return false
   try {
     const text = fs.readFileSync(path.join(root, configFile), 'utf8')
-    return new RegExp(`alias\\s*:\\s*[^\\n]+['"\`]${alias}['"\`]`).test(text) || text.includes(`find: '${alias}'`) || text.includes(`find: "${alias}"`)
+    return (
+      new RegExp(`alias\\s*:\\s*\\{[\\s\\S]{0,400}?['"\`]${alias}['"\`]\\s*:`).test(text) ||
+      new RegExp(`alias\\s*:\\s*[^\\n]+['"\`]${alias}['"\`]`).test(text) ||
+      text.includes(`find: '${alias}'`) ||
+      text.includes(`find: "${alias}"`)
+    )
   } catch {
     return false
   }
@@ -128,8 +180,36 @@ function suggestionList(report: Omit<AgentProjectGuideReport, 'suggestions'>, al
   return suggestions
 }
 
+/** inspectProject 的内部扩展入参：插件运行时可注入 vite 已解析的 alias 结果。 */
+export interface InspectProjectInternalOptions extends AgentProjectGuideOptions {
+  /**
+   * vite config 解析后的运行时判定（config.resolve.alias 已规范化）。
+   * 传了就以它为准（true/false 都采信），不再做文本/tsconfig 推断 —— runtime-truth。
+   */
+  resolvedAlias?: boolean
+}
+
+/**
+ * 按 vite `matches(pattern, importee)` 语义判定 resolved alias 是否命中 alias 前缀。
+ * vite 的 normalizeSingleAlias 已把 `'@/': '/src/'` 剥尾斜杠成 `find: '@'`，故 string find 只有前缀形式。
+ */
+export function aliasMatchesResolved(resolved: unknown, alias: string): boolean {
+  if (!Array.isArray(resolved)) return false
+  const probes = [alias, `${alias}/__agent_eyes_probe__`]
+  return resolved.some((entry) => {
+    const find = (entry as { find?: unknown })?.find
+    if (find instanceof RegExp) return probes.some((p) => find.test(p))
+    if (typeof find !== 'string') return false
+    return probes.some((importee) => {
+      if (importee.length < find.length) return false
+      if (importee === find) return true
+      return importee.startsWith(`${find}/`)
+    })
+  })
+}
+
 /** 生成项目结构体检报告。 */
-export function inspectProject(root: string, options: AgentProjectGuideOptions = {}): AgentProjectGuideReport {
+export function inspectProject(root: string, options: InspectProjectInternalOptions = {}): AgentProjectGuideReport {
   const alias = options.alias ?? '@'
   const pkg = readJsonFile(root, 'package.json')
   const deps = dependencies(pkg)
@@ -141,7 +221,9 @@ export function inspectProject(root: string, options: AgentProjectGuideOptions =
     packageManager: packageManager(root),
     viteConfig,
     tsConfig,
-    alias: hasAliasInTsConfig(root, tsConfig, alias) || hasAliasInViteConfig(root, viteConfig, alias),
+    alias:
+      options.resolvedAlias ??
+      (hasAliasInTsConfig(root, tsConfig, alias) || hasAliasInViteConfig(root, viteConfig, alias)),
     apiLayer: sourceDir ? findLayerDirs(root, sourceDir, API_DIRS) : [],
     businessLayer: sourceDir ? findLayerDirs(root, sourceDir, BUSINESS_DIRS) : [],
     routeLayer: sourceDir ? findLayerDirs(root, sourceDir, ROUTE_DIRS) : [],
@@ -163,7 +245,10 @@ export function agentProjectGuide(options: AgentProjectGuideOptions = {}): Plugi
     configureServer(server) {
       if (options.enabled === false) return
       const root = server.config.root || process.cwd()
-      const report = inspectProject(root, options)
+      // runtime-truth：configureServer 时 config 已 resolve，config.resolve.alias 是 vite 规范化后的
+      // 真实 alias —— 优先采信，而不是靠 tsconfig/vite 配置文本推断。
+      const resolvedAlias = aliasMatchesResolved(server.config.resolve?.alias, options.alias ?? '@')
+      const report = inspectProject(root, { ...options, resolvedAlias })
       const logDir = path.resolve(root, options.logDir ?? 'log')
       fs.mkdirSync(logDir, { recursive: true })
       fs.writeFileSync(path.join(logDir, 'project-guide.json'), JSON.stringify(report, null, 2))

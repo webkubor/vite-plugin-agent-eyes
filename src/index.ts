@@ -7,7 +7,14 @@ import { sanitizeAuthProfile, type AgentAuthProfileInput, type AgentAuthState } 
 import { formatInteractionLine, type InteractionEntry } from './interaction'
 import { agentGit, type AgentGitOptions, type AgentGitWebhook, type CommitInfo } from './git'
 import { agentSizeWatch, type AgentSizeWatchOptions } from './size-watch'
-import { agentProjectGuide, inspectProject, type AgentProjectGuideOptions, type AgentProjectGuideReport } from './project-guide'
+import {
+  agentProjectGuide,
+  aliasMatchesResolved,
+  inspectProject,
+  type AgentProjectGuideOptions,
+  type AgentProjectGuideReport,
+  type InspectProjectInternalOptions,
+} from './project-guide'
 import {
   agentGuard,
   createGuardHookScript,
@@ -32,8 +39,8 @@ export { agentVersion } from './version'
 // dev 期文件行数/体积实时看门狗（CSS 更严，只 warn 不阻断）
 export { agentSizeWatch }
 export type { AgentSizeWatchOptions }
-export { agentProjectGuide, inspectProject }
-export type { AgentProjectGuideOptions, AgentProjectGuideReport }
+export { agentProjectGuide, inspectProject, aliasMatchesResolved }
+export type { AgentProjectGuideOptions, AgentProjectGuideReport, InspectProjectInternalOptions }
 export {
   agentGuard,
   createGuardHookScript,

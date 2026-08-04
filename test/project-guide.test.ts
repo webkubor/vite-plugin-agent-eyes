@@ -9,7 +9,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { ViteDevServer } from 'vite'
 import { describe, expect, it } from 'vitest'
-import { agentProjectGuide, inspectProject } from '../src/project-guide'
+import { agentProjectGuide, aliasMatchesResolved, inspectProject } from '../src/project-guide'
 
 function tempRoot(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-project-guide-'))
@@ -69,6 +69,51 @@ describe('inspectProject', () => {
     expect(report.suggestions.join('\n')).toContain('API/request/service')
     expect(report.suggestions.join('\n')).toContain('router/routes/pages/views')
   })
+
+  it('prefers runtime resolvedAlias over text/tsconfig inference (runtime-truth)', () => {
+    const root = tempRoot()
+    // 文本推断会误判无 alias：vite.config 与 tsconfig 都没有 @ alias
+    write(root, 'package.json', JSON.stringify({ dependencies: { vue: '^3.0.0' } }))
+    write(root, 'vite.config.ts', 'export default { plugins: [] }')
+    write(root, 'tsconfig.json', JSON.stringify({ compilerOptions: {} }))
+    write(root, 'src/main.ts')
+
+    const byInference = inspectProject(root)
+    expect(byInference.detected.alias).toBe(false)
+
+    // 但 vite 运行时实际配置了 @ alias —— 应采信运行时真值
+    const withRuntimeTrue = inspectProject(root, { resolvedAlias: true })
+    expect(withRuntimeTrue.detected.alias).toBe(true)
+
+    // 反向：文件里写了 @ alias，但运行时实际没配 —— 不应误报
+    write(root, 'vite.config.ts', "resolve: { alias: { '@': '/src' } }")
+    const byInferenceTrue = inspectProject(root)
+    expect(byInferenceTrue.detected.alias).toBe(true)
+    const withRuntimeFalse = inspectProject(root, { resolvedAlias: false })
+    expect(withRuntimeFalse.detected.alias).toBe(false)
+  })
+})
+
+describe('aliasMatchesResolved', () => {
+  it('matches vite normalized string aliases', () => {
+    // 对应 vite config `resolve.alias: { '@': '/src' }` 和 `'@/': '/src/'`（后者被剥尾斜杠成 '@'）
+    expect(aliasMatchesResolved([{ find: '@', replacement: '/src' }], '@')).toBe(true)
+    expect(aliasMatchesResolved([{ find: '@', replacement: '/src' }], 'aliases')).toBe(false)
+    expect(aliasMatchesResolved([{ find: '~', replacement: '/src' }], '@')).toBe(false)
+  })
+
+  it('matches RegExp find and ignores non-alias entries', () => {
+    expect(aliasMatchesResolved([{ find: /^@\//, replacement: '/src' }], '@')).toBe(true)
+    expect(aliasMatchesResolved([{ find: /^~/, replacement: '/src' }], '@')).toBe(false)
+    // 混入 vite 内置的 @vite/* alias 不应命中
+    expect(aliasMatchesResolved([{ find: /^\/?@vite\/env/, replacement: '/x' }], '@')).toBe(false)
+  })
+
+  it('returns false for non-array input', () => {
+    expect(aliasMatchesResolved(undefined, '@')).toBe(false)
+    expect(aliasMatchesResolved(null, '@')).toBe(false)
+    expect(aliasMatchesResolved({ find: '@', replacement: '/src' }, '@')).toBe(false)
+  })
 })
 
 describe('agentProjectGuide', () => {
@@ -85,5 +130,24 @@ describe('agentProjectGuide', () => {
     const report = JSON.parse(fs.readFileSync(path.join(root, 'log', 'project-guide.json'), 'utf8'))
     expect(report.suggestions.length).toBeGreaterThan(0)
     expect(warnings.join('\n')).toContain('project-guide.json')
+  })
+
+  it('uses runtime resolve.alias from server config over text inference', () => {
+    const root = tempRoot()
+    const warnings: string[] = []
+    write(root, 'package.json', JSON.stringify({ devDependencies: { vite: '^5.0.0' } }))
+    write(root, 'vite.config.ts', 'export default { plugins: [] }') // 文本推断无 alias
+    write(root, 'tsconfig.json', JSON.stringify({ compilerOptions: {} }))
+    write(root, 'src/main.ts')
+
+    const server = fakeServer(root, warnings)
+    ;(server.config as { resolve?: unknown }).resolve = { alias: [{ find: '@', replacement: '/src' }] }
+
+    const plugin = agentProjectGuide()
+    if (typeof plugin.configureServer !== 'function') throw new Error('configureServer is not a function')
+    ;(plugin.configureServer as (this: unknown, server: ViteDevServer) => void).call({}, server)
+
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'log', 'project-guide.json'), 'utf8'))
+    expect(report.detected.alias).toBe(true)
   })
 })

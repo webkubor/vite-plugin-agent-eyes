@@ -1,7 +1,7 @@
 ---
 name: agent-eyes
 description: "vite-plugin-agent-eyes 的 agent 使用手册。两块能力：① 自愈遥测——读结构化运行时日志（API/错误/控制台/交互/代理 header）+ 脱敏登录态 + 截图 + DOM 快照，不靠猜代码就诊断修复；② 提交治理——agentGit（去 husky，统一 pre-commit/post-commit + 飞书通知）、agentGuard（提交期硬拦 secret/超长文件/屎山）、agentSizeWatch（dev 期实时警告超长文件）。在 Vite/Astro 项目里配置 agentGit/agentGuard/agentSizeWatch 或排查 guard 拦截/误报时必读。"
-version: 0.13.0
+version: 0.13.1
 ---
 
 # Vite Agent Debugger

@@ -2,6 +2,16 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.13.1] - 2026-08-04
+
+### Fixed
+- `agentProjectGuide` 的 alias 检测改为 runtime-truth：插件在 vite 进程内直接读 `config.resolve.alias`（`configureServer` 时已 resolve），不再靠 tsconfig/vite 配置文本推断。此前文本扫描会因多行对象写法、`references`/`extends` 拆分配置、JSONC 注释/尾逗号而误报「未配 alias」。
+- `inspectProject` 支持注入 `resolvedAlias` 运行时判定，传入即直接采信（true/false 均优先于推断）；新增导出 `aliasMatchesResolved()` 按 vite `matches` 语义精确匹配，兼容 string 与 RegExp `find`，且不会误中 vite 内置 `@vite/*` alias。
+
+### Changed
+- `hasAliasInTsConfig` 跟随 `references` / `extends` 链递归查找 `paths`，覆盖根 tsconfig 仅做 project references 的工程形态；tsconfig 按 JSONC 解析（剥注释/尾逗号）。
+- `hasAliasInViteConfig` 支持 `alias: { '@': ... }` 多行对象写法。
+
 ## [0.13.0] - 2026-08-02
 
 ### Added
