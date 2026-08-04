@@ -69,4 +69,24 @@ describe('agentSizeWatch', () => {
     write(root, 'src/big.ts', 999)
     expect(runStartup({ enabled: false }, root)).toBe('')
   })
+
+  it('ignores dot-prefixed dirs by default and merges them into custom exclude', () => {
+    const root = tempRoot()
+    write(root, '.claude/skills/huge.ts', 999)
+    write(root, '.worktrees/feature/src/x.ts', 999)
+    write(root, 'src/still-big.ts', 999)
+    write(root, 'src/vendor/huge.ts', 999)
+
+    const text = runStartup({}, root)
+    expect(text).not.toContain('.claude')
+    expect(text).not.toContain('.worktrees')
+    expect(text).toContain('src/still-big.ts')
+    expect(text).toContain('src/vendor/huge.ts')
+
+    const text2 = runStartup({ exclude: /vendor/ }, root)
+    expect(text2).not.toContain('.claude')
+    expect(text2).not.toContain('.worktrees')
+    expect(text2).not.toContain('src/vendor/huge.ts')
+    expect(text2).toContain('src/still-big.ts')
+  })
 })

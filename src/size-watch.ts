@@ -14,7 +14,10 @@ import { lineCount } from './guard-core'
 import { DEFAULT_CSS_LENGTH_WARN, DEFAULT_FILE_LENGTH_WARN } from './guard-types'
 
 const DEFAULT_INCLUDE = /\.(?:ts|tsx|js|jsx|mjs|cjs|vue|svelte|astro|css|scss|sass|less)$/
-const DEFAULT_EXCLUDE = /(?:^|[\\/])(?:node_modules|dist|build|\.git|\.astro|\.next|\.nuxt|coverage|log)(?:[\\/]|$)/
+// dot 开头目录（.git/.claude/.worktrees/.next/.nuxt/.astro/.cache 等）是工具链/缓存/第三方产物，
+// 不是拆分对象，一律默认忽略，且用户自定义 exclude 时也会自动并入该规则。
+const DOT_DIR = /(?:^|[\\/])\.[^\\/]+(?:[\\/]|$)/
+const DEFAULT_EXCLUDE = /(?:^|[\\/])(?:node_modules|dist|build|coverage|log)(?:[\\/]|$)/
 const CSS_EXT = /\.(?:css|scss|sass|less)$/
 // guard-core 跳过二进制看 NUL 字节；这里只处理文本源文件，按扩展名已足够，超大文件直接跳过。
 const MAX_BYTES = 1024 * 1024
@@ -29,7 +32,7 @@ export interface AgentSizeWatchOptions {
   cssWarn?: number
   /** 纳入扫描的文件，默认常见源码 + 样式扩展名。 */
   include?: RegExp
-  /** 排除的路径（相对项目根匹配），默认 node_modules/dist/.git/.astro 等。 */
+  /** 排除的路径（相对项目根匹配），默认 node_modules/dist/build/coverage/log 等；dot 开头目录始终忽略。 */
   exclude?: RegExp
 }
 
@@ -104,7 +107,8 @@ export function agentSizeWatch(options: AgentSizeWatchOptions = {}): Plugin {
   const warn = options.warn ?? DEFAULT_FILE_LENGTH_WARN
   const cssWarn = options.cssWarn ?? DEFAULT_CSS_LENGTH_WARN
   const include = options.include ?? DEFAULT_INCLUDE
-  const exclude = options.exclude ?? DEFAULT_EXCLUDE
+  // 用户自定义 exclude 也自动并入 dot 目录忽略规则，避免各项目重复手写 .claude/.worktrees 等。
+  const exclude = new RegExp(`${DOT_DIR.source}|${(options.exclude ?? DEFAULT_EXCLUDE).source}`)
 
   return {
     name: 'vite-plugin-agent-eyes-size-watch',

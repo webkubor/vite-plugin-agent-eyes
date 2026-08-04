@@ -2,6 +2,11 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.13.2] - 2026-08-04
+
+### Changed
+- `agentSizeWatch` 默认忽略所有 dot 开头目录（`.git`/`.claude`/`.worktrees`/`.codex`/`.gemini`/`.next`/`.cache` 等）——这些是 AI 工具链/缓存/第三方产物，不是拆分对象，扫描只会产出噪声；用户自定义 `exclude` 时也自动并入该规则，不再要求各项目手写 `.claude` 等条目。
+
 ## [0.13.1] - 2026-08-04
 
 ### Fixed
