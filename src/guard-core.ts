@@ -8,17 +8,23 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import {
+  CSS_VAR_DECL_PATTERN,
+  CSS_VAR_FILE_PATTERN,
+  CSS_VAR_USE_PATTERN,
+  DEFAULT_CSS_VAR_IGNORE_PREFIXES,
   DEFAULT_FILE_LENGTH_BLOCK,
   DEFAULT_FILE_LENGTH_WARN,
   DEFAULT_LARGE_FILE_BLOCK_BYTES,
   DEFAULT_REPORT_FILE,
   GENERATED_FILE_PATTERN,
+  JS_VAR_DECL_PATTERN,
   SECRET_PATTERNS,
   type AddedLine,
   type AgentGuardChecks,
   type AgentGuardOptions,
   type AgentGuardLevel,
   type GuardCheckSwitch,
+  type GuardCssVarsOptions,
   type GuardFileLengthOptions,
   type GuardLargeFilesOptions,
   type GuardReportItem,
@@ -55,6 +61,11 @@ function fileLengthOptions(checks: AgentGuardOptions['checks']): GuardFileLength
   return typeof checks.fileLength === 'object' ? checks.fileLength : {}
 }
 
+function cssVarsOptions(checks: AgentGuardOptions['checks']): GuardCssVarsOptions {
+  if (!checks || Array.isArray(checks)) return {}
+  return typeof checks.cssVars === 'object' ? checks.cssVars : {}
+}
+
 function switchValue<Key extends keyof AgentGuardChecks>(checks: AgentGuardOptions['checks'], key: Key): GuardCheckSwitch | undefined {
   if (!checks || Array.isArray(checks)) return undefined
   const value = checks[key]
@@ -85,6 +96,7 @@ export function normalizeGuardConfig(options: AgentGuardOptions = {}): Normalize
   const checks = options.checks
   const largeFiles = largeFilesOptions(checks)
   const fileLength = fileLengthOptions(checks)
+  const cssVars = cssVarsOptions(checks)
 
   return {
     level,
@@ -106,6 +118,15 @@ export function normalizeGuardConfig(options: AgentGuardOptions = {}): Normalize
       todo: normalizedSwitch(level, checks, 'todo', 'warn'),
       noAny: normalizedSwitch(level, checks, 'noAny', 'warn'),
       noConsoleLog: normalizedSwitch(level, checks, 'noConsoleLog', 'warn'),
+      cssVars: {
+        enabled: enabledFor(checks, 'cssVars'),
+        // 默认 block：var() 引空值会让**整条声明静默失效**（z-index 退回 auto、
+        // 圆角/间距归零），而 tsc/eslint/构建全部照过，只有真人点到那个组件才暴露。
+        // 又因为只查新增行，存量项目接入不会被历史债淹没，故按红线处理。
+        severity: severityFor(level, switchValue(checks, 'cssVars'), 'block'),
+        declareFrom: cssVars.declareFrom ?? [],
+        ignorePrefixes: cssVars.ignorePrefixes ?? DEFAULT_CSS_VAR_IGNORE_PREFIXES,
+      },
     },
   }
 }
@@ -210,6 +231,85 @@ export function collectStagedFiles(cwd: string): StagedFile[] {
   return stagedPathNames(cwd).map((filePath) => stagedFileFromPath(cwd, filePath))
 }
 
+function addDeclaredFromText(declared: Set<string>, text: string): void {
+  for (const match of text.matchAll(CSS_VAR_DECL_PATTERN)) declared.add(match[1])
+  for (const match of text.matchAll(JS_VAR_DECL_PATTERN)) declared.add(match[1])
+}
+
+function readFileSafe(filePath: string): string | undefined {
+  try {
+    return fs.readFileSync(filePath, 'utf8')
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * 收集「已声明的 CSS 自定义属性」全集：仓库内跟踪的样式/脚本文件 + declareFrom 指定的外部来源。
+ *
+ * 用 `git ls-files` 而非目录遍历：天然跳过 node_modules、dist 与 .gitignore 内容，
+ * 也不需要引入 glob 依赖（本包保持零运行时依赖）。设计 token 包不被 git 跟踪，
+ * 必须由调用方通过 declareFrom 点明。
+ */
+export function collectDeclaredCssVars(cwd: string, declareFrom: string[] = []): Set<string> {
+  const declared = new Set<string>()
+
+  let tracked: string[] = []
+  try {
+    tracked = gitText(cwd, ['ls-files']).split('\n').filter(Boolean)
+  } catch {
+    tracked = []
+  }
+
+  for (const relative of tracked) {
+    if (!CSS_VAR_FILE_PATTERN.test(relative)) continue
+    const text = readFileSafe(path.resolve(cwd, relative))
+    if (text) addDeclaredFromText(declared, text)
+  }
+
+  for (const relative of declareFrom) {
+    const text = readFileSafe(path.resolve(cwd, relative))
+    if (text) addDeclaredFromText(declared, text)
+  }
+
+  return declared
+}
+
+/**
+ * 检查 staged 新增行里 var(--x) 是否引用了从未声明的自定义属性。
+ *
+ * 只看新增行 → 存量债不阻断；同一行同一变量只报一次 → 避免重复噪声。
+ */
+export function runCssVarChecks(
+  file: StagedFile,
+  config: NormalizedGuardConfig,
+  declared: Set<string>,
+): GuardReportItem[] {
+  const check = config.checks.cssVars
+  if (!check.enabled || !CSS_VAR_FILE_PATTERN.test(file.path)) return []
+
+  const items: GuardReportItem[] = []
+  for (const added of file.addedLines) {
+    const seen = new Set<string>()
+    for (const match of added.text.matchAll(CSS_VAR_USE_PATTERN)) {
+      const name = match[1]
+      if (seen.has(name) || declared.has(name)) continue
+      if (check.ignorePrefixes.some((prefix) => name.startsWith(prefix))) continue
+      seen.add(name)
+      items.push(
+        addedLineItem(
+          'cssVars',
+          check.severity,
+          file,
+          added,
+          `var(${name}) 从未声明 —— 整条声明会静默失效（构建与 lint 都不报错），检查拼写或补上该 token`,
+        ),
+      )
+    }
+  }
+  return items
+}
+
 function summarizeItems(items: GuardReportItem[]): GuardResult['summary'] {
   return {
     block: items.filter((item) => item.severity === 'block').length,
@@ -255,7 +355,18 @@ function finalizeGuardResult(cwd: string, reportFile: string, result: GuardResul
 export function runGuard(options: AgentGuardOptions = {}, cwd = process.cwd()): GuardResult {
   const config = normalizeGuardConfig(options)
   try {
-    const items = collectStagedFiles(cwd).flatMap((file) => runTextChecks(file, config))
+    const staged = collectStagedFiles(cwd)
+    const items = staged.flatMap((file) => runTextChecks(file, config))
+
+    if (config.checks.cssVars.enabled && staged.some((file) => CSS_VAR_FILE_PATTERN.test(file.path))) {
+      const declared = collectDeclaredCssVars(cwd, config.checks.cssVars.declareFrom)
+      // 空全集 = 采集失败（非 git 环境等）或项目根本没有自定义属性。
+      // 此时若照常检查，会把每一个 var() 都判成未声明 —— 宁可放行也不能制造全量误报。
+      if (declared.size > 0) {
+        items.push(...staged.flatMap((file) => runCssVarChecks(file, config, declared)))
+      }
+    }
+
     return finalizeGuardResult(cwd, config.reportFile, resultFromItems(config.level, items))
   } catch (error) {
     return finalizeGuardResult(cwd, config.reportFile, resultFromItems(config.level, [guardErrorItem(error)]))

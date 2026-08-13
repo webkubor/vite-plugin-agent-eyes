@@ -2,6 +2,16 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.14.0] - 2026-08-13
+
+### Added
+- `agentGuard` 新增内置检查 `cssVars`（默认 block）：拦住新增行里 `var(--x)` 引用了从未声明的自定义属性。`var(--不存在)` 会让**整条声明失效**并退回初始值——`z-index` 变 `auto` 导致浮层层级塌陷、被遮罩压住点不动，圆角与间距归零——而 `tsc`/ESLint/`vite build` 全部照过，只有真人点到那个组件才暴露，属于典型的静默失效红线。
+- 检查同时覆盖 `.css` 与 `.ts/.tsx/.vue/.svelte`：Tailwind arbitrary value（`z-[var(--z-overlay)]`）与内联 `style` 同样是 `var()` 引用，只扫样式表会整类漏检。
+- 配置项 `cssVars.declareFrom`（把 `node_modules` 里的设计 token 包等未被 git 跟踪的声明源并入全集）与 `cssVars.ignorePrefixes`（默认忽略 `--radix-`/`--tw-`/`--vaul-`/`--sonner-`/`--swiper-` 这类框架运行时注入变量）。
+- 新增导出 `collectDeclaredCssVars()`、`runCssVarChecks()` 与类型 `GuardCssVarsOptions`。
+
+防误报设计：只检查新增行，存量项目接入不会被历史债淹没；声明全集为空时（非 git 环境／采集失败／项目本来没有自定义属性）整项跳过，不会把每个 `var()` 都判成未声明。仓库内声明用 `git ls-files` 采集，天然跳过 `node_modules` 与 `.gitignore` 内容，并计入 `style={{ '--x': v }}` 这类动态声明。
+
 ## [0.13.2] - 2026-08-04
 
 ### Changed
