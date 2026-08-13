@@ -27,6 +27,18 @@ export interface GuardLargeFilesOptions {
   blockBytes?: number
 }
 
+/** CSS 自定义属性（设计 token）存在性检查配置。 */
+export interface GuardCssVarsOptions {
+  /**
+   * 额外的声明来源：相对仓库根的文件路径，用于把仓库外的声明并入全集。
+   * 设计 token 常由 npm 包提供、不被 git 跟踪，必须在这里点明，否则会被判成未声明。
+   * 例：`['node_modules/@acme/design-tokens/tokens.css']`
+   */
+  declareFrom?: string[]
+  /** 忽略的变量名前缀（框架运行时注入的，不是设计 token）。默认见 DEFAULT_CSS_VAR_IGNORE_PREFIXES。 */
+  ignorePrefixes?: string[]
+}
+
 /** 内置检查项配置。 */
 export interface AgentGuardChecks {
   /** 检测疑似 token、secret、private key、webhook。 */
@@ -41,6 +53,8 @@ export interface AgentGuardChecks {
   noAny?: GuardCheckSwitch
   /** 检测新增 console.log。 */
   noConsoleLog?: GuardCheckSwitch
+  /** 检测新增行里 var(--x) 引用了从未声明的自定义属性（含 Tailwind arbitrary value）。 */
+  cssVars?: GuardCheckSwitch | GuardCssVarsOptions
 }
 
 /** agentGuard 用户配置。 */
@@ -77,6 +91,14 @@ export interface NormalizedFileLengthCheck extends NormalizedGuardCheck {
   block: number
 }
 
+/** 标准化后的 CSS 自定义属性检查配置。 */
+export interface NormalizedCssVarsCheck extends NormalizedGuardCheck {
+  /** 仓库外的额外声明来源（相对仓库根）。 */
+  declareFrom: string[]
+  /** 忽略的变量名前缀。 */
+  ignorePrefixes: string[]
+}
+
 /** 标准化后的 guard 配置。 */
 export interface NormalizedGuardConfig {
   /** guard 等级。 */
@@ -93,6 +115,7 @@ export interface NormalizedGuardConfig {
     todo: NormalizedGuardCheck
     noAny: NormalizedGuardCheck
     noConsoleLog: NormalizedGuardCheck
+    cssVars: NormalizedCssVarsCheck
   }
 }
 
@@ -164,6 +187,31 @@ export const DEFAULT_CSS_LENGTH_WARN = 300
 /** 生成物文件：lockfile 与压缩产物不计入 fileLength（非手写代码，行数无意义）。 */
 export const GENERATED_FILE_PATTERN =
   /(?:^|\/)(?:pnpm-lock\.yaml|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|bun\.lockb?|composer\.lock|Cargo\.lock|poetry\.lock|Gemfile\.lock|Podfile\.lock|go\.sum)$|\.min\.(?:js|css)$/
+
+/**
+ * cssVars 默认忽略的变量前缀：这些由 UI 框架在运行时注入到元素上，
+ * 静态扫描永远找不到声明，纳入检查只会产生固定误报。
+ */
+export const DEFAULT_CSS_VAR_IGNORE_PREFIXES = ['--radix-', '--tw-', '--vaul-', '--sonner-', '--swiper-']
+
+/** CSS 自定义属性声明：`--x:`（含 :root、@theme、内联 style 属性名）。 */
+export const CSS_VAR_DECL_PATTERN = /(--[a-zA-Z0-9_-]+)\s*:/g
+
+/** CSS 自定义属性引用：`var(--x`（同时覆盖 Tailwind 的 `z-[var(--x)]` 写法）。 */
+export const CSS_VAR_USE_PATTERN = /var\(\s*(--[a-zA-Z0-9_-]+)/g
+
+/**
+ * JS/TS 里以字符串键声明自定义属性：`style={{ '--x': v }}`。
+ * 这是合法的动态声明方式，必须计入全集，否则会把它们误报成未声明。
+ */
+export const JS_VAR_DECL_PATTERN = /['"](--[a-zA-Z0-9_-]+)['"]/g
+
+/**
+ * 参与 cssVars 检查与声明采集的文件类型。含 ts/tsx/vue/svelte 是因为
+ * var() 引用同样出现在 Tailwind arbitrary value 和内联 style 里——
+ * 只扫 .css 会整类漏检（这是本检查最初要解决的问题）。
+ */
+export const CSS_VAR_FILE_PATTERN = /\.(?:css|scss|sass|less|styl|ts|tsx|js|jsx|mjs|cjs|vue|svelte|astro)$/
 
 /** secret/token/webhook 文本检测规则。 */
 export const SECRET_PATTERNS = [
