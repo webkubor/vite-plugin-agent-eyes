@@ -478,6 +478,25 @@ log/<port>/proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req)
 
 `recordLoginSuccess` 允许字段：`userId` / `accountId` / `email` / `name` / `username` / `roles` / `tenantId` / `projectId` / `workspaceId` / `extra`。敏感 key 会被丢弃，`email` 会脱敏。
 
+## 配套：同一条前端质量链路
+
+`cssVars` guard 拦的是**变量不存在**，但变量存在之后还有两层能坏。
+[**contrast-guard**](https://github.com/webkubor/contrast-guard)（零依赖，12.6KB）接着往下守：
+
+| 时机 | 工具 | 拦什么 | 漏掉会怎样 |
+|---|---|---|---|
+| 写代码当下 | **agent-eyes** `agentSizeWatch` | 文件越堆越长 | CSS 屎山，改一处牵一片 |
+| `git commit` 前 | **agent-eyes** `agentGuard` 的 `cssVars` | `var(--从未声明的变量)` | 整条声明失效：`z-index` 退回 `auto`、圆角归零 |
+| CI | contrast-guard `check` | 变量存在，但色值对比度不达标 | 文字看不清，a11y 不过；**它还会反推出该改成 `L=58%`** |
+| 页面跑起来 | contrast-guard `measure` | 值都对，但用得太碎 | 一屏 9 种字号、灰阶只拉开 2 层，每处单看都"对"，合起来就是丑 |
+| 出问题时 | **agent-eyes** 运行时日志 / 截图 | 运行时错误、登录态、API 失败 | agent 只能靠猜代码 |
+
+递进很清楚：**变量不存在** → **变量存在但值不合格** → **值都合格但用得失控**。
+三种都不报错、都能过构建，只是坏的方式不同。
+
+`measure` 抓的是渲染后所有可见元素的 computed style 统计——正好补上本插件
+「DOM 快照不含 computed styles」这条局限（见下方 Roadmap）。
+
 ## 更新日志
 
 - **[CHANGELOG.md](./CHANGELOG.md)** — 完整版本历史
@@ -489,7 +508,7 @@ log/<port>/proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req)
 - **🟡 长日志仍可能截断半行**：`maxBytes` 截断当前按字符，下个版本改为按行 + 字节精确衡量。
 - **🟡 dev server 退出时未 flush**：节流窗口内最后一批 buffer（console/截图）可能不落盘，下个版本挂 server `close` hook。
 - **🟡 日志关联仍靠 cid 字符串匹配**：当前通过 correlation ID 串联同一次错误的 console/DOM/screenshot，但文件名和日志行里的 cid 需要 agent 自己 grep 匹配。下个版本可加索引文件 `log/correlations.json`。
-- **🟡 DOM 快照只抓 body.innerHTML**：不含 computed styles / pseudo elements，视觉相关问题仍依赖 CDP 截图。下个版本可考虑抓关键元素的盒模型数据。
+- **🟡 DOM 快照只抓 body.innerHTML**：不含 computed styles / pseudo elements，视觉相关问题仍依赖 CDP 截图。下个版本可考虑抓关键元素的盒模型数据。当前可用 [`contrast-guard measure <url>`](https://github.com/webkubor/contrast-guard) 顶上——它遍历所有可见元素的 computed style 出统计（字号集中度、灰阶层数、动效覆盖率）。
 
 > 欢迎在 [Issues](https://github.com/webkubor/vite-plugin-agent-eyes/issues) 反馈，或直接 PR。
 
