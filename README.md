@@ -20,6 +20,8 @@
 [![typescript](https://img.shields.io/badge/TypeScript-ready-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![license](https://img.shields.io/npm/l/vite-plugin-agent-eyes?color=42b883)](./LICENSE)
 
+**📖 [完整文档](https://webkubor.github.io/vite-plugin-agent-eyes/)** · [API 参考](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-eyes) · [AGENT_GUIDE](./AGENT_GUIDE.md)
+
 </div>
 
 > **框架无关**：纯 Vite 插件 + 浏览器原生 API（`fetch` / `XMLHttpRequest` / `history`）。React、Vue、Svelte、Solid、原生 JS 都能用，不依赖任何框架。
@@ -32,47 +34,17 @@
 - 控制台错误转瞬即逝，且混着扩展噪声——**没有可追溯、可分类的错误流**。
 - 接口返回的真实字段常和类型定义不一致——**只能猜**。
 
-本插件把这些落成 **结构化、可解析、每次启动清空、最新在最上** 的运行时日志；0.9.0 起记录脱敏登录态画像，0.10.0 起自动记录脱敏交互轨迹，方便 agent 还原 UI、控制浏览器和复现路径。
-
-## 文档入口
-
-- **📖 在线文档站**：[webkubor.github.io/vite-plugin-agent-eyes](https://webkubor.github.io/vite-plugin-agent-eyes/) — 指南 + API 参考，结构化导航（源码在 [`website/`](./website)）。
-- **人读**：继续看本 README，重点是安装方式、能力说明、API 和配置项。
-- **agent 读**：[AGENT_GUIDE.md](./AGENT_GUIDE.md) 是可发布的 agent 操作手册；项目运行后还会生成 `log/README.md` 和 `log/<port>/README.md`，告诉 agent 当前端口该读哪些运行时日志。
-- **让 agent 主动会用**：[AGENT_BOOTSTRAP.md](./AGENT_BOOTSTRAP.md) 给 Codex、Claude Code、Gemini CLI、Hermes agent 提供入口文件和可复制指令片段。
-- **Codex/Claude skill**：[SKILL.md](./SKILL.md) 是给支持 skill 机制的 agent 注册和触发用的压缩入口。
-
-## 类型提示与配置诊断
-
-- 包内发布 `dist/*.d.ts`，`agentEyes()`、`agentDebugger()`、`agentProxy()`、`autoInstrument()`、`recordLoginSuccess()`、`recordInteraction()` 等入口都有 TypeScript 类型和 hover 说明。
-- `agentDebugger()` 会在 dev server 启动时提示常见配置错误，例如 `endpoint` 没有以 `/` 开头、`flushMs` / `maxBytes` 过小。
-- `agentProxy()` 会在 Vite 配置加载时提示 target 非 `http(s)`、`flushMs` / `maxBytes` 过小；`extra.configure` 会保留并先执行。
+本插件把这些落成 **结构化、可解析、每次启动清空、最新在最上** 的运行时日志，并记录脱敏的登录态画像与交互轨迹，方便 agent 还原 UI、控制浏览器和复现路径。
 
 ## 安装
 
 ```bash
 pnpm add -D vite-plugin-agent-eyes
-# or
-npm i -D vite-plugin-agent-eyes
 ```
 
-## Vite 版本兼容
+`peerDependencies` 支持 `vite >=4 <9`，CI 按 4 / 5 / 6 / 7 / 8 主版本矩阵验证。
 
-`peerDependencies` 支持 `vite >=4 <9`。CI 会按矩阵验证当前主线：
-
-| Vite 主版本 | 验证版本 |
-|------|------|
-| 4 | `4.5.14` |
-| 5 | `5.4.21` |
-| 6 | `6.4.3` |
-| 7 | `7.3.6` |
-| 8 | `8.2.0` |
-
-本包只依赖稳定的 Vite dev server 插件接口（`configureServer`、`transformIndexHtml`、`handleHotUpdate`、`server.proxy`），所以按主版本矩阵做兼容验证。未来 Vite 9 出来后先加矩阵跑通，再放开 peer 范围。
-
-## 用法
-
-### 1. 默认全开（`vite.config.ts`）
+## 快速上手
 
 ```ts
 import { defineConfig } from 'vite'
@@ -84,284 +56,29 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      '/api': agentProxy('https://your-api.example.com'),  // log/<port>/proxy-<host>.log + 本地 cookie 修复
+      '/api': agentProxy('https://your-api.example.com'), // 代理日志 + 本地 cookie 修复
     },
   },
 })
 ```
 
-`agentEyes()` 只在 `vite dev` 生效。它会自动向 dev HTML 注入 `autoInstrument()`，所以普通项目不再需要手动改 `main.tsx/main.ts`。没有后端代理时可以先不配 `agentProxy()`。
+`agentEyes()` 只在 `vite dev` 生效，会自动向 dev HTML 注入埋点，**普通项目不用改 `main.tsx`**。
+逐项关闭传 `{ client: false, sizeWatch: false, git: false }`。
 
-如果要逐项关闭：
+需要精细控制时，客户端也可手动调用 `autoInstrument()` 或更底层的
+`logApiCall` / `recordLoginSuccess` 等——见 [客户端 API](https://webkubor.github.io/vite-plugin-agent-eyes/api/client-functions)。
 
-```ts
-agentEyes({
-  client: false,     // 不自动注入 autoInstrument()
-  sizeWatch: false,  // 不提示超长文件
-  git: false,        // 不安装默认 guard hook
-})
-```
+## 能力一览
 
-### 1.5 Git workflow：提交前命令 + 提交后 webhook（0.4.0+，可选）
-
-让**任意 Vite 项目零配置**获得「提交前检查 + 提交后通知」——装上插件、跑一次 `vite dev`，git 钩子自动就位，无需各项目再配 husky / `.git/hooks`。
-
-```ts
-import { agentEyes, agentGit } from 'vite-plugin-agent-eyes'
-
-export default defineConfig({
-  plugins: [
-    ...agentEyes({ git: false }),
-    agentGit({
-      precommit: ['pnpm typecheck', 'pnpm lint'],        // 任一非零退出即阻断提交
-      webhook: {                                          // 单个 webhook
-        url: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxxx',
-        format: 'feishu',                                 // 内置飞书；或 (info) => 自定义载荷
-      },
-      guard: { level: 'block' },                         // 0.8.0+：提交前检查 staged 风险
-      // claimHooksPath: true,  // 若你用了全局 core.hooksPath（lefthook 等），开此项让本项目钩子生效
-    }),
-  ],
-})
-```
-
-**多 webhook 推送**（0.7.0+）：支持同时推送到多个平台（如飞书 + 钉钉 + 企业微信）：
-
-```ts
-agentGit({
-  precommit: ['pnpm typecheck', 'pnpm lint'],
-  webhook: [
-    {
-      url: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxxx',
-      format: 'feishu',
-    },
-    {
-      url: 'https://oapi.dingtalk.com/robot/send?access_token=yyyy',
-      format: (info) => ({
-        msgtype: 'text',
-        text: { content: `📝 [${info.project}] ${info.author} 提交（${info.branch}）\n🕐 ${info.timestamp}\n${info.message}` }
-      }),
-    },
-    {
-      url: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=zzzz',
-      format: (info) => ({
-        msgtype: 'text',
-        text: { content: `📝 [${info.project}] ${info.author} 提交（${info.branch}）\n🕐 ${info.timestamp}\n${info.message}` }
-      }),
-    },
-  ],
-})
-```
-
-**推送信息增强**（0.7.0+）：默认推送信息包含：
-- 项目名称
-- 提交作者
-- **分支名称**（新增）
-- **提交时间**（新增，UTC 格式）
-- 提交信息
-
-- 钩子内容**自包含**，`git commit` 时独立运行，不依赖 dev server 在跑。
-- 只接管带 `agent-eyes managed` 标记的钩子；遇到你已有的、非本插件写的钩子默认**不覆盖**（`force: true` 强制）。
-- 自定义通知：`webhook.format` 传 `(info: CommitInfo) => payload`（纯函数，会序列化进钩子脚本），`info` 含 `project / repo / author / branch / message / hash / timestamp`。
-- 仅 dev 期安装钩子（`apply: 'serve'`）；不传 `guard` / `precommit` / `webhook` 时为 no-op。
-- 多 webhook 时逐个推送，单个失败不影响其他。
-
-### 1.6 Human Guard：提交前风险门禁（0.8.0+，可选）
-
-`agentGuard()` 面向人在控制台提交前的最后一道防线：只检查 staged files，提前拦住明显错误、敏感信息、超大文件和屎山信号，并写出 agent 可读报告。
-
-```ts
-import { agentGuard } from 'vite-plugin-agent-eyes'
-
-export default defineConfig({
-  plugins: [
-    agentGuard({
-      level: 'block',
-      checks: {
-        secrets: true,
-        largeFiles: true,
-        fileLength: { warn: 400, block: 800 },
-        todo: 'warn',
-        noAny: 'warn',
-        noConsoleLog: 'warn',
-        // 设计 token 由 npm 包提供时，必须把包内 CSS 点出来，否则它声明的变量会被判成未声明
-        cssVars: { declareFrom: ['node_modules/@acme/design-tokens/tokens.css'] },
-      },
-    }),
-  ],
-})
-```
-
-如果已经在用 `agentGit()`，直接把 guard 配进 `agentGit({ guard })`，不要同时再挂 `agentGuard()`，避免两个插件争用 `pre-commit`：
-
-```ts
-agentGit({
-  guard: {
-    level: 'block',
-    checks: ['secrets', 'largeFiles', 'fileLength', 'todo', 'noAny', 'noConsoleLog', 'cssVars'],
-  },
-  precommit: ['pnpm typecheck', 'pnpm lint'],
-  webhook: { url: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxxx', format: 'feishu' },
-})
-```
-
-等级语义：
-
-| level | 提交行为 | 适用场景 |
-|------|----------|----------|
-| `warn` | 所有检查只报告，不阻断 | 老项目接入、先观察噪声 |
-| `block` | secrets / largeFiles 等红线阻断，质量信号警告 | 默认推荐 |
-| `strict` | 当前等同 `block`，预留给后续更激进的团队门禁 | 新项目、核心仓库、发布前 |
-
-默认检查项：
-
-| 检查项 | 默认等级 | 说明 |
-|--------|----------|------|
-| `secrets` | block | staged diff 中疑似 token、secret、private key、webhook URL |
-| `largeFiles` | block | staged 文件超过 1 MB |
-| `fileLength` | warn | staged 文件当前行数超过 400 行警告、800 行阻断 |
-| `todo` | warn | 新增 TODO / FIXME / HACK |
-| `noAny` | warn | TypeScript 新增显式 `any` |
-| `noConsoleLog` | warn | 前端源码新增 `console.log` |
-| `cssVars` | block | 新增行里 `var(--x)` 引用了从未声明的自定义属性 |
-
-每次提交会在控制台打印报告，并写入 `log/guard-report.json`。这个文件给 agent 后续排查用；运行时日志仍在 `log/<port>/`。
-
-#### cssVars：为什么它是 block
-
-`var(--不存在)` 不会报错、不会崩溃——CSS 规范下它让**整条声明失效**并退回初始值：`z-index` 变 `auto`（浮层层级塌陷、被遮罩压住点不动）、圆角与间距归零。`tsc`、ESLint、`vite build` 全部照过，只有真人在页面上点到那个组件才会暴露，所以按红线处理。
-
-它同时覆盖 `.css` 与 `.ts/.tsx/.vue/.svelte`：`var()` 引用不只写在样式表里，Tailwind 的 arbitrary value（`z-[var(--z-overlay)]`、`rounded-[var(--radius-md)]`）和内联 `style` 同样是引用，失效方式一模一样。只扫 CSS 会整类漏掉这些。
-
-| 配置 | 默认 | 说明 |
-|------|------|------|
-| `declareFrom` | `[]` | 额外声明来源（相对仓库根）。设计 token 包在 `node_modules` 里、不被 git 跟踪，必须在此点明 |
-| `ignorePrefixes` | `--radix-` `--tw-` `--vaul-` `--sonner-` `--swiper-` | 框架运行时注入的变量，静态扫描找不到声明，纳入只会固定误报 |
-
-两条防误报设计：只检查**新增行**，所以存量项目接入不会被历史债淹没；声明全集为空时（非 git 环境、采集失败、项目本来没有自定义属性）整项跳过，不会把每个 `var()` 都判成未声明。仓库内声明通过 `git ls-files` 采集，天然跳过 `node_modules` 与 `.gitignore` 内容，也包含 `style={{ '--x': v }}` 这类动态声明。
-
-### 1.7 Size Watch：dev 期文件超长实时警告（0.12.0+，可选）
-
-`agentGuard()` 在**提交时**才拦超长文件，`agentSizeWatch()` 则在**写代码当下**就提示——dev 启动扫一遍源文件，之后每次保存对改动文件增量检查，超阈值就在 Vite 控制台 `[agent-eyes:size]` 黄色 warn。**只 warn，不阻断、不影响 build**。专治 AI 把 CSS 越堆越长的屎山文件，早期就能看见。
-
-```ts
-import { agentSizeWatch } from 'vite-plugin-agent-eyes'
-
-export default defineConfig({
-  plugins: [
-    agentSizeWatch(), // 默认即可：通用 400 行、CSS/SCSS/Less 300 行
-    // 或自定义：agentSizeWatch({ warn: 400, cssWarn: 300, exclude: /vendor/ })
-  ],
-})
-```
-
-| 选项 | 默认 | 说明 |
-|------|------|------|
-| `enabled` | `true` | 关掉整个看门狗 |
-| `warn` | `400` | 通用源码（ts/tsx/js/vue/svelte/astro…）行数警告阈值 |
-| `cssWarn` | `300` | CSS/SCSS/Sass/Less 行数警告阈值（更严） |
-| `include` | 常见源码 + 样式扩展名 | 纳入扫描的文件正则 |
-| `exclude` | `node_modules`/`dist`/`build`/`.git`/`.astro`/`.next`/`.nuxt`/`coverage`/`log` | 排除路径正则（相对项目根匹配） |
-
-二进制 / 超过 1 MB 的文件直接跳过。Astro 项目同理把 `agentSizeWatch()` 加进 `astro.config` 的 `vite.plugins`。
-
-### 2. 客户端（你的应用入口文件）
-
-如果用了 `agentEyes()`，这一步已经自动完成；下面只适用于你关闭了 `client` 自动注入，或选择继续用底层 `agentDebugger()`。
-
-**手动一行自动埋点**（0.2.0+）——自动包装 `fetch` / `XMLHttpRequest` / 路由导航 / 全局错误 / 全控制台 / DOM 快照；0.10.0+ 默认记录 click/input/change/submit/route 脱敏交互轨迹，无需逐个拦截器手动埋点：
-
-```ts
-import { autoInstrument } from 'vite-plugin-agent-eyes/client'
-autoInstrument()
-```
-
-**或手动埋点**（需要精细控制时）：
-
-```ts
-import { installAgentErrorReporter, logApiCall, logConsoleEntry, snapshotDom } from 'vite-plugin-agent-eyes/client'
-
-installAgentErrorReporter()  // 捕获 window error / unhandledrejection / 全控制台 / DOM 快照
-
-// 在你的 fetch / ky / axios 拦截器里，请求结束后：
-logApiCall({ method, path, url, ok, duration_ms, code, status, request: reqBody, response: resBody })
-
-// 手动记录控制台
-logConsoleEntry('warn', ['deprecated API called'])
-
-// 手动抓 DOM 快照
-snapshotDom()
-```
-
-**记录登录成功账户画像**（0.9.0+）：
-
-```ts
-import { recordLoginSuccess } from 'vite-plugin-agent-eyes/client'
-
-recordLoginSuccess({
-  userId: currentUser.id,
-  email: currentUser.email,        // 写入前自动脱敏为 a***@example.com
-  name: currentUser.name,
-  roles: currentUser.roles,
-  tenantId: currentUser.tenantId,
-})
-```
-
-这只保存脱敏后的账户画像和登录成功信号，不保存 token、cookie、Authorization、refresh token。浏览器里会注入只读 `window.__AGENT_EYES_AUTH__`，dev server 会写入 `log/<port>/auth-state.json`。
-
-**交互轨迹**（0.10.0+）：`autoInstrument()` 默认安装，也可手动调用：
-
-```ts
-import { installAgentInteractionTracer, recordInteraction } from 'vite-plugin-agent-eyes/client'
-
-installAgentInteractionTracer()
-recordInteraction('click', buttonElement)
-```
-
-`input` / `change` 只写 `<redacted>`，不会保存真实表单值；dev server 会写入 `log/<port>/interaction.log`，用于还原“先到哪个页面、点了哪个按钮、在哪个表单触发问题”。
-
-## 日志与报告
-
-运行时日志写进 `log/<port>/`（`*.log` 不入库），每次启动清空，**最新记录在文件最上方**，`head` 即看本次会话。顶层 `log/instances.json` 记录当前端口、分支、进程和启动时间；`log/project-guide.json` 记录项目类型、API/业务/路由/配置层级和 alias 建议。
-
-| 文件 | 内容 | 何时看 |
-|------|------|--------|
-| **log/\<port\>/api-calls.log** | 全部 API（成功 + 失败）+ 路由跳转，带请求/响应体 | 查接口契约、定字段、调用顺序 |
-| **log/\<port\>/errors.log** | API 失败 + 前端运行时错误，**聚合去重 + 频率计数**（0.2.0） | 只看「哪坏了」、哪个刷得最凶 |
-| **log/\<port\>/console.log** | 全级别控制台输出（log/warn/error/info/debug） | React dev warning、库 deprecation、调试信息 |
-| **log/\<port\>/interaction.log** | click/input/change/submit/route 脱敏交互轨迹 | 还原复现路径、定位“人或 agent 做了什么” |
-| **log/\<port\>/proxy-\<host\>.log** | 代理层 `Cookie` / `Set-Cookie` 属性 / status | 网络/鉴权层（fetch 看不到） |
-| **log/\<port\>/snapshots/** | 错误截图（PNG）+ DOM 快照（HTML） | 视觉+结构双重现场 |
-| **log/\<port\>/auth-state.json** | 最近一次登录成功的脱敏账户画像 | 还原 UI、浏览器控制、确认当前账号 |
-| **log/project-guide.json** | 项目结构体检和规划建议 | 开局判断 API/业务/路由/配置层级、检查 `@` alias |
-| **log/guard-report.json** | 提交前 guard 的最近一次 JSON 报告 | 看 commit 被阻断或预警的原因 |
-
-`log/README.md` 是给 agent 的自描述入口（启动时自动生成）。`errors.log` 顶部是 `Top Errors`（按频率降序），省去 agent 自己数频率。
-
-## 错误截图 + DOM 快照（0.3.0+）
-
-开启后，每次前端错误或 API 失败自动通过 CDP 截取当前页面，存入 `log/<port>/snapshots/err-{timestamp}.png`。同时自动 dump DOM 结构为 `log/<port>/snapshots/dom-{timestamp}.html`（无需 CDP）。
-
-```ts
-// vite.config.ts
-export default defineConfig({
-  plugins: [
-    agentDebugger({ screenshots: true }),  // 开启截图（DOM 快照始终启用）
-  ],
-})
-```
-
-**前置条件**：Chrome 需要带 remote debugging 启动（仅截图需要，DOM 快照不需要）：
-
-```bash
-# macOS
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
-
-# 或在现有 Chrome 里打开一个新窗口
-open -a "Google Chrome" --args --remote-debugging-port=9222
-```
-
-插件**自动检测** CDP 端口：先读 Chrome 进程参数，再扫描 9222-9232，找到即用。未找到时静默跳过，不影响现有日志。
+| 能力 | 一句话 | 文档 |
+|---|---|---|
+| **运行时日志** | API / 错误 / 控制台 / 交互轨迹落成结构化日志，agent 直接读 | [日志总览](https://webkubor.github.io/vite-plugin-agent-eyes/guide/logs) |
+| **代理层日志** | `Cookie` / `Set-Cookie` / status —— fetch 看不到的那层 | [agentProxy](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-proxy) |
+| **错误截图 + DOM 快照** | 出错自动截图（CDP 自动探测端口）+ dump DOM | [快照](https://webkubor.github.io/vite-plugin-agent-eyes/guide/snapshots) |
+| **登录态画像** | 脱敏账户画像，agent 一眼知道当前浏览器是谁 | [登录态](https://webkubor.github.io/vite-plugin-agent-eyes/guide/auth-profile) |
+| **提交前 guard** | secrets / 大文件 / 超长文件 / `any` / `console.log` / `cssVars` | [Guard](https://webkubor.github.io/vite-plugin-agent-eyes/guide/guard) |
+| **Git workflow** | 零配置装 pre-commit / post-commit，支持多平台 webhook | [Git workflow](https://webkubor.github.io/vite-plugin-agent-eyes/guide/git-workflow) |
+| **Size Watch** | dev 期文件超长实时 warn，专治 AI 堆屎山 | [Size Watch](https://webkubor.github.io/vite-plugin-agent-eyes/guide/size-watch) |
 
 ## 招牌案例：登录成功却一直 401
 
@@ -375,140 +92,68 @@ log/<port>/proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req)
 
 测试/生产 https 同域不受影响。要关掉：`agentProxy(target, { rewriteCookiesForLocalhost: false })`。
 
-## API
+## cssVars：为什么它是唯一 block 级的样式检查
 
-### `agentEyes(options?): Plugin[]`
+`var(--不存在)` 不会报错、不会崩溃——CSS 规范下它让**整条声明失效**并退回初始值：`z-index` 变 `auto`（浮层层级塌陷、被遮罩压住点不动）、圆角与间距归零。**`tsc`、ESLint、`vite build` 全部照过**，只有真人在页面上点到那个组件才会暴露，所以按红线处理。
 
-默认开发入口。返回一组 Vite 插件，推荐用 `plugins: [...agentEyes()]`。
+它同时覆盖 `.css` 与 `.ts/.tsx/.vue/.svelte`——Tailwind 的 arbitrary value（`z-[var(--z-overlay)]`）和内联 `style` 同样是引用，只扫 CSS 会整类漏掉。
 
-| 选项 | 默认 | 说明 |
-|------|------|------|
-| `telemetry` | `{}` | 传给 `agentDebugger()`；`false` 关闭运行时日志服务端 |
-| `client` | `{}` | 自动向 dev HTML 注入 `autoInstrument()`；`false` 关闭 |
-| `sizeWatch` | `{}` | 传给 `agentSizeWatch()`；`false` 关闭 dev 超长文件提醒 |
-| `projectGuide` | `{}` | 传给 `agentProjectGuide()`；`false` 关闭项目类型/层级/alias 体检 |
-| `guard` | `{ level: 'block' }` | 默认提交 guard；`false` 关闭 |
-| `git` | `{ guard }` | 传给 `agentGit()`；`false` 关闭默认 git hook |
+两条防误报设计：只检查**新增行**，存量项目接入不会被历史债淹没；声明全集为空时整项跳过。
 
-### `agentDebugger(options?): Plugin`
+> ⚠️ 设计 token 由 npm 包提供时必须点明来源，否则它声明的变量会被判成未声明：
+> `cssVars: { declareFrom: ['node_modules/@acme/design-tokens/tokens.css'] }`
 
-| 选项 | 默认 | 说明 |
-|------|------|------|
-| `logDir` | `'log'` | 日志目录（相对项目根） |
-| `endpoint` | `'/dev/log'` | 接收前端上报的端点 |
-| `flushMs` | `200` | 落盘节流间隔（ms），高频上报只批写 |
-| `maxBytes` | `524288` | 单日志文件大小上限（字节），超过截断旧记录 |
-| `screenshots` | `false` | 错误时自动截图（通过 CDP） |
+## 日志与报告
 
-### `agentProxy(target, options?): ProxyOptions`
+运行时日志写进 `log/<port>/`，每次启动清空，**最新记录在文件最上方**，`head` 即看本次会话。
 
-| 选项 | 默认 | 说明 |
-|------|------|------|
-| `rewriteCookiesForLocalhost` | `true` | 本地 http 上把上游 cookie 改成可存 |
-| `logDir` | `'log'` | 日志目录 |
-| `flushMs` | `200` | 落盘节流间隔（ms） |
-| `maxBytes` | `524288` | 单文件大小上限（字节） |
-| `extra` | — | 透传给 vite `ProxyOptions` 的额外字段 |
+| 文件 | 内容 | 何时看 |
+|------|------|--------|
+| **api-calls.log** | 全部 API（成功 + 失败）+ 路由跳转，带请求/响应体 | 查接口契约、定字段、调用顺序 |
+| **errors.log** | API 失败 + 前端运行时错误，聚合去重 + 频率计数 | 只看「哪坏了」、哪个刷得最凶 |
+| **console.log** | 全级别控制台输出 | React dev warning、库 deprecation |
+| **interaction.log** | click/input/change/submit/route 脱敏交互轨迹 | 还原复现路径 |
+| **proxy-\<host\>.log** | 代理层 `Cookie` / `Set-Cookie` 属性 / status | 网络、鉴权层 |
+| **snapshots/** | 错误截图（PNG）+ DOM 快照（HTML） | 视觉 + 结构双重现场 |
+| **auth-state.json** | 最近一次登录成功的脱敏账户画像 | 确认当前账号 |
+| `log/guard-report.json` | 提交前 guard 的最近一次报告 | 看 commit 为何被拦 |
+| `log/project-guide.json` | 项目结构体检与 alias 建议 | 开局判断项目层级 |
 
-> 多个代理各自按 target host 分文件（`proxy-api.example.com.log`、`proxy-admin.example.com.log`），互不覆盖。
-
-### `agentProjectGuide(options?): Plugin`
-
-| 选项 | 默认 | 说明 |
-|------|------|------|
-| `enabled` | `true` | 是否启用项目体检 |
-| `logDir` | `'log'` | 报告输出目录，写入 `log/project-guide.json` |
-| `sourceDir` | 自动识别 `src` / `app` | 指定源码目录 |
-| `alias` | `'@'` | 检查 Vite 与 tsconfig/jsconfig 是否配置快捷 alias |
-| `warn` | `true` | 是否在 dev 控制台输出建议摘要 |
-
-> 检查项目类型、API/业务/路由/配置层级和 `@` alias，只给建议不阻断启动。
-
-### `agentGit(options?): Plugin`
-
-| 选项 | 默认 | 说明 |
-|------|------|------|
-| `guard` | — | `AgentGuardOptions` 或 `false`；配置后在自定义 `precommit` 命令前执行 staged 风险检查 |
-| `precommit` | `[]` | 提交前依次执行的命令，任一非零退出即阻断提交 |
-| `webhook` | — | `{ url, format }`；`format` 为 `'feishu'` 或 `(info: CommitInfo) => payload` |
-| `projectLabel` | 仓库名 | 通知里显示的项目名 |
-| `enabled` | `true` | 总开关 |
-| `force` | `false` | 覆盖已有的、非本插件管理的钩子 |
-| `claimHooksPath` | `false` | 全局 `core.hooksPath` 遮蔽本仓库钩子时，自动设本地覆盖让其生效 |
-
-> dev 启动时幂等安装 `pre-commit` / `post-commit` 到本仓库 hooks 目录（绝不写全局 hooks 目录）。`CommitInfo` 字段：`project / repo / author / branch / message / hash / timestamp`。
-
-### `agentGuard(options?): Plugin`
-
-| 选项 | 默认 | 说明 |
-|------|------|------|
-| `level` | `'block'` | `warn` 只报告；`block` 阻断红线；`strict` 当前等同 `block`，预留更严格门禁 |
-| `checks` | 全部内置检查 | 数组形式选择检查项，或对象形式细调严重度/阈值 |
-| `reportFile` | `'log/guard-report.json'` | 最近一次 guard JSON 报告路径 |
-
-### `agentSizeWatch(options?): Plugin`
-
-| 选项 | 默认 | 说明 |
-|------|------|------|
-| `enabled` | `true` | 是否启用 dev 期看门狗 |
-| `warn` | `400` | 通用源码行数警告阈值 |
-| `cssWarn` | `300` | CSS/SCSS/Sass/Less 行数警告阈值（更严） |
-| `include` | 常见源码 + 样式扩展名 | 纳入扫描的文件正则 |
-| `exclude` | 见上文 | 排除路径正则 |
-
-> 仅 `apply: 'serve'`，启动全量扫描 + 热更新增量检查，超阈值在控制台 `[agent-eyes:size]` warn；只警告不阻断，不影响 build。
-
-### 客户端（`vite-plugin-agent-eyes/client`）
-
-| 函数 | 说明 |
-|------|------|
-| `autoInstrument(opts?)` | **一键自动埋点**：fetch + XHR + 导航 + 错误 + 全控制台 + DOM 快照 + 脱敏交互轨迹，各子项可独立开关，返回卸载函数。幂等（防 StrictMode/HMR 重复包装） |
-| `installAgentErrorReporter()` | 挂全局错误捕获 + 全控制台拦截 + DOM 快照，返回卸载函数 |
-| `installAgentInteractionTracer(opts?)` | 自动捕获 click/input/change/submit/route，写入 `interaction.log`，返回卸载函数 |
-| `recordInteraction(kind, target?, opts?)` | 手动记录一次交互；input/change 只写 `<redacted>` |
-| `logApiCall(entry)` | 在 HTTP 拦截器记录一次 API 调用（默认脱敏敏感字段，`entry.raw=true` 放行） |
-| `logConsoleEntry(level, args)` | 记录一条控制台输出（log/warn/error/info/debug） |
-| `recordLoginSuccess(profile, opts?)` | 记录一次登录成功画像，脱敏后写 BOM 和 `auth-state.json` |
-| `installAgentAuthRecorder({ getProfile })` | 从业务提供的 `getProfile` 读取当前用户画像并记录一次，返回卸载函数 |
-| `snapshotDom()` | 抓取当前页面 DOM 结构（document.body.innerHTML），供 agent 解析 |
-| `logNav(from, to)` | 记录路由导航轨迹 |
-| `logError(line)` | 记录任意自定义错误行 |
-
-`autoInstrument` 选项：`logBody`(默认 true) / `raw`(默认 false) / `nav`(默认 true) / `errors`(默认 true) / `interactions`(默认 true) / `endpoint`。
-
-`recordLoginSuccess` 允许字段：`userId` / `accountId` / `email` / `name` / `username` / `roles` / `tenantId` / `projectId` / `workspaceId` / `extra`。敏感 key 会被丢弃，`email` 会脱敏。
+`log/README.md` 是给 agent 的自描述入口（启动时自动生成）；`errors.log` 顶部是按频率降序的 `Top Errors`，省去 agent 自己数频率。
 
 ## 配套：同一条前端质量链路
 
-`cssVars` guard 拦的是**变量不存在**，但变量存在之后还有两层能坏。
+`cssVars` 拦的是**变量不存在**，但变量存在之后还有两层能坏。
 [**contrast-guard**](https://github.com/webkubor/contrast-guard)（零依赖，12.6KB）接着往下守：
 
 | 时机 | 工具 | 拦什么 | 漏掉会怎样 |
 |---|---|---|---|
 | 写代码当下 | **agent-eyes** `agentSizeWatch` | 文件越堆越长 | CSS 屎山，改一处牵一片 |
-| `git commit` 前 | **agent-eyes** `agentGuard` 的 `cssVars` | `var(--从未声明的变量)` | 整条声明失效：`z-index` 退回 `auto`、圆角归零 |
-| CI | contrast-guard `check` | 变量存在，但色值对比度不达标 | 文字看不清，a11y 不过；**它还会反推出该改成 `L=58%`** |
+| `git commit` 前 | **agent-eyes** `agentGuard` 的 `cssVars` | `var(--从未声明)` | 整条声明失效，`z-index` 退回 `auto` |
+| CI | contrast-guard `check` | 变量存在，但对比度不达标 | 文字看不清；**它会反推出该改成 `L=58%`** |
 | 页面跑起来 | contrast-guard `measure` | 值都对，但用得太碎 | 一屏 9 种字号、灰阶只拉开 2 层，每处单看都"对"，合起来就是丑 |
 | 出问题时 | **agent-eyes** 运行时日志 / 截图 | 运行时错误、登录态、API 失败 | agent 只能靠猜代码 |
 
-递进很清楚：**变量不存在** → **变量存在但值不合格** → **值都合格但用得失控**。
+递进关系：**变量不存在** → **变量存在但值不合格** → **值都合格但用得失控**。
 三种都不报错、都能过构建，只是坏的方式不同。
 
-`measure` 抓的是渲染后所有可见元素的 computed style 统计——正好补上本插件
-「DOM 快照不含 computed styles」这条局限（见下方 Roadmap）。
+## 文档
 
-## 更新日志
+- **📖 [在线文档站](https://webkubor.github.io/vite-plugin-agent-eyes/)** — 指南 + 完整 API 参考（源码在 [`website/`](./website)）
+- **agent 读**：[AGENT_GUIDE.md](./AGENT_GUIDE.md)；项目运行后还会生成 `log/README.md` 告诉 agent 该读哪些日志
+- **让 agent 主动会用**：[AGENT_BOOTSTRAP.md](./AGENT_BOOTSTRAP.md) — Codex / Claude Code / Gemini CLI / Hermes 的入口与指令片段
+- **Codex/Claude skill**：[SKILL.md](./SKILL.md)
+- **更新日志**：[CHANGELOG.md](./CHANGELOG.md) · [Releases](https://github.com/webkubor/vite-plugin-agent-eyes/releases)
 
-- **[CHANGELOG.md](./CHANGELOG.md)** — 完整版本历史
-- **[GitHub Releases](https://github.com/webkubor/vite-plugin-agent-eyes/releases)** — 每个版本的可读发布说明
+所有导出都带 `dist/*.d.ts` 类型和 hover 说明；`agentDebugger()` / `agentProxy()` 会在启动时提示常见配置错误。
 
 ## 已知局限 & Roadmap
 
-- **🟡 敏感脱敏仍需扩展**：`csrfToken` 等 camelCase 变体已覆盖（0.2.0），但 `ssn` / `credit_card` / `cvv` 等 PII 未纳入黑名单——按业务需要自行扩展 `redact` 或用 `raw` 控制。
-- **🟡 长日志仍可能截断半行**：`maxBytes` 截断当前按字符，下个版本改为按行 + 字节精确衡量。
-- **🟡 dev server 退出时未 flush**：节流窗口内最后一批 buffer（console/截图）可能不落盘，下个版本挂 server `close` hook。
-- **🟡 日志关联仍靠 cid 字符串匹配**：当前通过 correlation ID 串联同一次错误的 console/DOM/screenshot，但文件名和日志行里的 cid 需要 agent 自己 grep 匹配。下个版本可加索引文件 `log/correlations.json`。
-- **🟡 DOM 快照只抓 body.innerHTML**：不含 computed styles / pseudo elements，视觉相关问题仍依赖 CDP 截图。下个版本可考虑抓关键元素的盒模型数据。当前可用 [`contrast-guard measure <url>`](https://github.com/webkubor/contrast-guard) 顶上——它遍历所有可见元素的 computed style 出统计（字号集中度、灰阶层数、动效覆盖率）。
+- **🟡 敏感脱敏仍需扩展**：`ssn` / `credit_card` / `cvv` 等 PII 未纳入黑名单——按需扩展 `redact` 或用 `raw` 控制。
+- **🟡 长日志仍可能截断半行**：`maxBytes` 截断按字符，下版改为按行 + 字节精确衡量。
+- **🟡 dev server 退出时未 flush**：节流窗口内最后一批 buffer 可能不落盘，下版挂 server `close` hook。
+- **🟡 日志关联靠 cid 字符串匹配**：cid 需 agent 自己 grep，下版可加索引文件 `log/correlations.json`。
+- **🟡 DOM 快照只抓 body.innerHTML**：不含 computed styles / pseudo elements。当前可用 [`contrast-guard measure <url>`](https://github.com/webkubor/contrast-guard) 顶上——它遍历所有可见元素的 computed style 出统计。
 
 > 欢迎在 [Issues](https://github.com/webkubor/vite-plugin-agent-eyes/issues) 反馈，或直接 PR。
 

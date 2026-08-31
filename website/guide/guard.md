@@ -65,6 +65,8 @@ export default defineConfig({
         todo: 'warn',
         noAny: 'warn',
         noConsoleLog: 'warn',
+        // 设计 token 由 npm 包提供时必须点明来源，否则它声明的变量会被判成未声明
+        cssVars: { declareFrom: ['node_modules/@acme/design-tokens/tokens.css'] },
       },
     }),
   ],
@@ -77,7 +79,7 @@ export default defineConfig({
 agentGit({
   guard: {
     level: 'block',
-    checks: ['secrets', 'largeFiles', 'fileLength', 'todo', 'noAny', 'noConsoleLog'],
+    checks: ['secrets', 'largeFiles', 'fileLength', 'todo', 'noAny', 'noConsoleLog', 'cssVars'],
   },
   precommit: ['pnpm typecheck', 'pnpm lint'],
   webhook: { url: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxxx', format: 'feishu' },
@@ -102,8 +104,35 @@ agentGit({
 | `todo` | warn | 新增 TODO / FIXME / HACK |
 | `noAny` | warn | TypeScript 新增显式 `any` |
 | `noConsoleLog` | warn | 前端源码新增 `console.log` |
+| `cssVars` | **block** | 新增行里 `var(--x)` 引用了从未声明的自定义属性（0.14.0+） |
 
 每次提交会在控制台打印报告，并写入 `log/guard-report.json`。这个文件给 agent 后续排查用；运行时日志仍在 `log/<port>/`。
+
+## cssVars：为什么它和 secrets 一样是 block
+
+`var(--不存在)` 不会报错、不会崩溃——CSS 规范下它让**整条声明失效**并退回初始值：
+`z-index` 变 `auto`（浮层层级塌陷、被遮罩压住点不动）、圆角与间距归零。
+**`tsc`、ESLint、`vite build` 全部照过**，只有真人在页面上点到那个组件才会暴露，
+所以按红线处理。
+
+它同时覆盖 `.css` 与 `.ts/.tsx/.vue/.svelte`：`var()` 引用不只写在样式表里，
+Tailwind 的 arbitrary value（`z-[var(--z-overlay)]`、`rounded-[var(--radius-md)]`）
+和内联 `style` 同样是引用，失效方式一模一样。只扫 CSS 会整类漏掉这些。
+
+| 配置 | 默认 | 说明 |
+|------|------|------|
+| `declareFrom` | `[]` | 额外声明来源（相对仓库根）。设计 token 包在 `node_modules` 里、不被 git 跟踪，必须在此点明 |
+| `ignorePrefixes` | `--radix-` `--tw-` `--vaul-` `--sonner-` `--swiper-` | 框架运行时注入的变量，静态扫描找不到声明，纳入只会固定误报 |
+
+两条防误报设计：只检查**新增行**，所以存量项目接入不会被历史债淹没；声明全集为空时
+（非 git 环境、采集失败、项目本来没有自定义属性）整项跳过，不会把每个 `var()` 都判成未声明。
+仓库内声明通过 `git ls-files` 采集，天然跳过 `node_modules` 与 `.gitignore` 内容，
+也包含 `style={{ '--x': v }}` 这类动态声明。
+
+> `cssVars` 拦的是「变量**不存在**」。变量存在之后还有两层能坏——值不合格（对比度不够）
+> 和用得失控（一屏 9 种字号、灰阶只拉开 2 层），由
+> [contrast-guard](https://github.com/webkubor/contrast-guard) 接着守。
+> 三种都不报错、都能过构建，只是坏的方式不同。
 
 ## 配了之后会发生什么
 
