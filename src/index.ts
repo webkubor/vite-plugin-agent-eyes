@@ -7,6 +7,7 @@ import { sanitizeAuthProfile, type AgentAuthProfileInput, type AgentAuthState } 
 import { formatInteractionLine, type InteractionEntry } from './interaction'
 import { agentGit, type AgentGitOptions, type AgentGitWebhook, type CommitInfo } from './git'
 import { syncAgentInstructions } from './agent-docs'
+export { syncAgentInstructions, AGENT_DOC_MARKERS } from './agent-docs'
 import { agentSizeWatch, type AgentSizeWatchOptions } from './size-watch'
 import {
   agentProjectGuide,
