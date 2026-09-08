@@ -79,6 +79,7 @@ export default defineConfig({
 | **提交前 guard** | secrets / 大文件 / 超长文件 / `any` / `console.log` / `cssVars` | [Guard](https://webkubor.github.io/vite-plugin-agent-eyes/guide/guard) |
 | **Git workflow** | 零配置装 pre-commit / post-commit，支持多平台 webhook | [Git workflow](https://webkubor.github.io/vite-plugin-agent-eyes/guide/git-workflow) |
 | **Size Watch** | dev 期文件超长实时 warn，专治 AI 堆屎山 | [Size Watch](https://webkubor.github.io/vite-plugin-agent-eyes/guide/size-watch) |
+| **Agent 自发现** | dev 启动把日志读法写进已有的 `CLAUDE.md`/`AGENTS.md`/`GEMINI.md`，agent 冷启动即可见 | [Agent Bootstrap](https://github.com/webkubor/vite-plugin-agent-eyes/blob/main/AGENT_BOOTSTRAP.md) |
 
 ## 招牌案例：登录成功却一直 401
 

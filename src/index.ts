@@ -6,6 +6,7 @@ import { captureScreenshot } from './cdp'
 import { sanitizeAuthProfile, type AgentAuthProfileInput, type AgentAuthState } from './auth-state'
 import { formatInteractionLine, type InteractionEntry } from './interaction'
 import { agentGit, type AgentGitOptions, type AgentGitWebhook, type CommitInfo } from './git'
+import { syncAgentInstructions } from './agent-docs'
 import { agentSizeWatch, type AgentSizeWatchOptions } from './size-watch'
 import {
   agentProjectGuide,
@@ -119,6 +120,13 @@ export interface AgentEyesOptions {
   guard?: AgentGuardOptions | false
   /** git hook 工作流配置；传 false 可关闭默认 guard hook。默认开启 guard-only。 */
   git?: AgentGitOptions | false
+  /**
+   * dev 启动时把「日志怎么读」写进已存在的 agent 指令文件（CLAUDE.md / AGENTS.md /
+   * GEMINI.md）中的标记块；传 false 可关闭。默认开启。
+   *
+   * 不会新建文件，也不会碰标记块以外的内容；内容没变就不写（不制造 git diff）。
+   */
+  agentDocs?: boolean
 }
 
 type ApiPayload = {
@@ -226,8 +234,34 @@ export function agentEyes(options: AgentEyesOptions = {}): Plugin[] {
     const guard = options.guard === false ? false : options.guard ?? { level: 'block' }
     plugins.push(agentGit({ guard, ...(options.git ?? {}) }))
   }
+  if (options.agentDocs !== false) {
+    const telemetry = options.telemetry === false ? {} : options.telemetry ?? {}
+    plugins.push(agentDocsPlugin(telemetry.logDir ?? 'log'))
+  }
 
   return plugins
+}
+
+/**
+ * 把日志读法写进 agent 指令文件。日志一直都在，但 agent 读的是指令文件而不会主动
+ * `ls log/` —— 不写进去，这套遥测对 agent 等于不存在。
+ */
+function agentDocsPlugin(logDirLabel: string): Plugin {
+  let done = false
+  return {
+    name: 'vite-plugin-agent-eyes-docs',
+    apply: 'serve',
+    configureServer(server) {
+      if (done) return
+      done = true
+      const updated = syncAgentInstructions(server.config.root, logDirLabel)
+      if (updated.length) {
+        server.config.logger.info(
+          `\x1b[36m[agent-eyes]\x1b[0m 已把日志读法写进 ${updated.join(' / ')}（agent 冷启动即可见）`,
+        )
+      }
+    },
+  }
 }
 
 function warnLine(server: ViteDevServer, message: string) {

@@ -14,6 +14,22 @@ The plugin itself is agent-agnostic: it writes plain files under `log/`, so Code
 | Hermes agent | Yes | Hermes task prompt or `.agents/skills/agent-eyes/SKILL.md` | In CortexOS projects, register the skill or include the snippet in the Hermes task template. |
 | Generic agent | Yes | `AGENT_GUIDE.md` or task prompt | The logs are plain text/JSON/HTML/PNG files. |
 
+## Automatic (since 0.15.0, recommended)
+
+`agentEyes()` writes the discovery rule for you. On `vite dev` it upserts an
+`<!-- agent-eyes:begin -->` block into whichever of `CLAUDE.md` / `AGENTS.md` /
+`GEMINI.md` **already exist** in the project root. It never creates those files,
+never touches anything outside the block, and skips the write when the content is
+unchanged, so it produces no repeated git diff.
+
+```ts
+agentEyes()                      // docs sync on (default)
+agentEyes({ agentDocs: false })  // opt out
+```
+
+Manual pasting (below) is only needed for agents whose instruction file is not one
+of those three, or when you keep the plugin's telemetry disabled.
+
 ## Shared Rule
 
 Paste this rule into the agent's project instruction file:

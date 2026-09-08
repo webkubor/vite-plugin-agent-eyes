@@ -2,6 +2,16 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.15.0] - 2026-09-08
+
+### Added
+- `agentEyes` 新增默认能力 `agentDocs`：dev 启动时把「这些日志怎么读」幂等写进项目里**已存在**的 agent 指令文件（`CLAUDE.md` / `AGENTS.md` / `GEMINI.md`）的 `<!-- agent-eyes:begin -->` 标记块。传 `agentDocs: false` 关闭。
+- 新增导出 `syncAgentInstructions()` 与 `AGENT_DOC_MARKERS`，可在自有脚本里复用。
+
+**为什么改成自动写**：日志一直都在，但 agent 不会主动 `ls log/` —— 它读的是项目指令文件。`AGENT_BOOTSTRAP.md` 原来要求人手动粘贴那段发现规则，现实中没人贴：2026-09-08 实测四个装了本插件的仓库，指令文件里提到 agent-eyes 的**是 0 个**。期间 agent 反复靠读 TS 类型定义和代码注释去猜接口字段，并且猜错——注释把一个字段的语义写反，agent 据此改坏了正确的业务逻辑；同一天另一次把「接口不下发某字段」误报成「该字段值为 null」，两者的排查方向完全不同。能力建好了却没进 agent 的上下文，等于没建。
+
+行为边界（避免惊喜）：**不新建文件**，只更新已经存在的那几个；只改标记块内部，块外内容原样保留；内容没变就不写，因此不会每次 dev 启动都给 `CLAUDE.md` 制造 git diff；文件只读或写失败时静默跳过，不阻断 dev。
+
 ## [0.14.0] - 2026-08-13
 
 ### Added

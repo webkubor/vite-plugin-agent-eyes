@@ -31,6 +31,7 @@ describe('agentEyes', () => {
         sizeWatch: false,
         projectGuide: false,
         git: false,
+        agentDocs: false,
       }),
     ).toEqual([])
   })
