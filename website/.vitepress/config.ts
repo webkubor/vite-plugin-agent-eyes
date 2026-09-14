@@ -20,6 +20,8 @@ export default defineConfig({
     ['meta', { property: 'og:image', content: agentEyesBanner }],
     ['meta', { name: 'twitter:image', content: agentEyesBanner }],
     ['link', { rel: 'icon', href: agentEyesLogo, type: 'image/png' }],
+    ['script', { async: true, src: 'https://plausible.io/js/pa-hTmvHLOJ1qBgegyjkmoxR.js' }],
+    ['script', {}, 'window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};plausible.init()'],
   ],
 
   themeConfig: {
