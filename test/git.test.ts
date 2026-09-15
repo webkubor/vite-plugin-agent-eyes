@@ -16,7 +16,8 @@ import { agentGit } from '../src/git'
 let tempDirs: string[] = []
 
 function makeRepo(prefix = 'agent-eyes-git-'): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix))
+  // realpath：钩子内烙的是 git 返回的绝对路径（macOS 上 /var → /private/var），断言基准需一致
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)))
   tempDirs = [...tempDirs, root]
   execFileSync('git', ['init'], { cwd: root, stdio: 'ignore' })
   execFileSync('git', ['config', '--local', 'core.hooksPath', '.git/hooks'], { cwd: root, stdio: 'ignore' })
@@ -24,7 +25,7 @@ function makeRepo(prefix = 'agent-eyes-git-'): string {
 }
 
 function makeNamedRepo(name: string): string {
-  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-eyes-git-'))
+  const parent = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agent-eyes-git-')))
   tempDirs = [...tempDirs, parent]
   const root = path.join(parent, name)
   fs.mkdirSync(root)
@@ -35,7 +36,7 @@ function makeNamedRepo(name: string): string {
 
 function makeRepoWithGlobalHooksPath(): { root: string; restoreGlobalConfig: () => void } {
   const previousGlobalConfig = process.env.GIT_CONFIG_GLOBAL
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-eyes-git-shadow-'))
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agent-eyes-git-shadow-')))
   tempDirs = [...tempDirs, root]
   const globalConfig = path.join(root, 'global-gitconfig')
   fs.writeFileSync(globalConfig, '[core]\n\thooksPath = global-hooks\n')

@@ -2,6 +2,18 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [0.15.1] - 2026-09-15
+
+### Fixed
+- `agentGit` 不再可能把钩子装到非仓库目录、凭空造出假 `.git` 壳。旧实现把 `git rev-parse --git-common-dir` 的相对输出和相对 `core.hooksPath` 都拿 vite root 当基准解析，而 git 对相对 `core.hooksPath` 的语义是**相对工作树顶层**——root 是子目录（monorepo / `root: 'website'`）时解析错位到不存在的路径，`mkdir -p` 会造出只有 `hooks/` 的假 `.git`（实测曾出现在 `~/dev` 和 `~`）。这种壳会让「见 `.git` 即仓库」的下游工具静默出错：`cs repo scan` 命中即 SkipDir，整个 `~/dev` 被当成一个仓库，台账本地检出从 62 掉到 13。修复四层：
+  1. git dir 一律用 `--path-format=absolute` 拿绝对路径（老 git 回退相对解析）；
+  2. 相对 `core.hooksPath` 按 git 语义相对 toplevel 解析（`claimHooksPath` 写入的相对值同步改为相对 toplevel）；
+  3. 安装前硬校验 git dir 含 `HEAD`，缺失即拒装并报错；
+  4. 安装目标必须落在本仓库内且不得经过非本仓库的 `.git` 段，越界即拒装，不再无条件 `mkdir -p`。
+
+### Added
+- 新增导出 `findFakeGitShells(startDir, stopDir?)`：向上检测「只有 `hooks/`、无 `HEAD`/`objects`」的假 `.git` 壳并识别 agent-eyes 痕迹，供清理存量事故现场；dev 启动时自动检测并告警（只报告 + 给出备份式清理命令，不自动删除——误删真仓库的风险不可接受）。
+
 ## [0.15.0] - 2026-09-08
 
 ### Added

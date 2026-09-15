@@ -35,6 +35,8 @@ import {
 // git workflow（提交前检查 + 提交后 webhook）—— 独立导出，与遥测职责解耦
 export { agentGit }
 export type { AgentGitOptions, AgentGitWebhook, CommitInfo }
+// 假 .git 壳检测（旧版 agentGit 误装事故的检测/清理入口）
+export { findFakeGitShells, type FakeGitShell } from './git'
 
 // 构建期版本/tag 戳记（只读，不造 tag）
 export { agentVersion } from './version'

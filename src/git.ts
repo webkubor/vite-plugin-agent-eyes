@@ -1,5 +1,6 @@
 import type { Plugin } from 'vite'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { execFileSync, execSync } from 'node:child_process'
 import { createGuardHookScript, type AgentGuardOptions } from './guard'
@@ -90,22 +91,103 @@ interface GitHooks {
   repoHooks: string
   /** git 实际会调用的钩子目录（含全局 hooksPath） */
   effDir: string
+  /** 真实 git dir（绝对路径，已验证含 HEAD） */
+  gitCommonDir: string
+  /** 工作树顶层（绝对路径）——相对 core.hooksPath 的解析基准 */
+  toplevel: string
   /** 全局 hooksPath 正遮蔽本仓库钩子（写进去也不会被调用） */
   shadowed: boolean
 }
 
-/** 解析 hooks 目录。非 git 仓库返回 null。 */
-function resolveHooks(root: string): GitHooks | null {
+/**
+ * 解析 hooks 目录。非 git 仓库返回 null；解析出的 git dir 不是真仓库（缺 HEAD）返回错误说明。
+ *
+ * 事故背景（2026-09-15 t_2026091503454080959a）：旧实现把 `--git-common-dir` 的相对输出和
+ * 相对 core.hooksPath 都拿 vite root 当基准 resolve —— 但 git 对相对 core.hooksPath 的语义
+ * 是相对 toplevel（实测基准）。root ≠ toplevel（子目录 root / monorepo / cwd 漂移）时解析
+ * 错位到不存在的路径，后续 mkdir -p 会凭空造出只有 hooks/ 的假 .git（曾出现在 ~/dev 和 ~），
+ * 下游 cs repo scan 命中假 .git 即 SkipDir，整个 ~/dev 被当成一个仓库、台账静默清零。
+ */
+function resolveHooks(root: string): GitHooks | { error: string } | null {
   const inside = sh('git rev-parse --is-inside-work-tree', root)
   if (inside !== 'true') return null
-  const common = sh('git rev-parse --git-common-dir', root) || sh('git rev-parse --git-dir', root)
-  if (!common) return null
-  const gitHooks = path.resolve(root, common, 'hooks')
+  // 一律要绝对路径（--path-format 需 git ≥2.31）；老 git 回退相对解析，靠下面的 HEAD 校验兜底
+  let common = sh('git rev-parse --path-format=absolute --git-common-dir', root)
+  if (!common) {
+    const rel = sh('git rev-parse --git-common-dir', root) || sh('git rev-parse --git-dir', root)
+    if (!rel) return null
+    common = path.resolve(root, rel)
+  }
+  // 真仓库硬校验：git dir 必须有 HEAD。缺 HEAD = 解析错位或假 .git 壳，装进去只会污染
+  if (!fs.existsSync(path.join(common, 'HEAD'))) {
+    return { error: `解析到的 git dir 不是有效仓库（缺 HEAD）：${common}` }
+  }
+  const toplevel = sh('git rev-parse --show-toplevel', root) || root
+  const gitHooks = path.join(common, 'hooks')
   const localPath = sh('git config --local --get core.hooksPath', root)
   const effPath = sh('git config --get core.hooksPath', root) // 本地或全局
-  const repoHooks = localPath ? path.resolve(root, localPath) : gitHooks
-  const effDir = effPath ? path.resolve(root, effPath) : gitHooks
-  return { repoHooks, effDir, shadowed: effDir !== repoHooks }
+  // 相对 core.hooksPath 按 git 语义相对 toplevel 解析，不能相对 vite root
+  const repoHooks = localPath ? path.resolve(toplevel, localPath) : gitHooks
+  const effDir = effPath ? path.resolve(toplevel, effPath) : gitHooks
+  return { repoHooks, effDir, gitCommonDir: common, toplevel, shadowed: effDir !== repoHooks }
+}
+
+/** 安装目标必须落在本仓库内（真实 git dir 或工作树），且不得经过任何「不是本仓库 git dir」的 .git 段。 */
+function validateHooksDir(hooksDir: string, gitCommonDir: string, toplevel: string): string | null {
+  const within = (dir: string, parent: string) => dir === parent || dir.startsWith(parent + path.sep)
+  if (within(hooksDir, gitCommonDir)) return null
+  if (!within(hooksDir, toplevel)) {
+    return `hooks 目录解析到仓库之外，拒绝安装：${hooksDir}（仓库：${toplevel}）`
+  }
+  // 在工作树内但路径中出现 .git 段（且不是真实 git dir）——mkdir 会造出假 .git 壳
+  if (path.relative(toplevel, hooksDir).split(path.sep).includes('.git')) {
+    return `hooks 目录指向了非本仓库的 .git，拒绝安装（会造出假 .git 壳）：${hooksDir}`
+  }
+  return null
+}
+
+export interface FakeGitShell {
+  /** 假壳所在目录（含 .git 的那个父目录） */
+  dir: string
+  /** 假 .git 的完整路径 */
+  gitDir: string
+  /** hooks 里是否有 agent-eyes 的痕迹（本插件旧版造成的壳） */
+  managedByAgentEyes: boolean
+}
+
+/**
+ * 从 startDir 向上（含自身，默认走到 $HOME 为止）检测「假 .git 壳」：
+ * 是目录、但没有 HEAD 也没有 objects —— 真 git dir 必有 HEAD，这种壳通常是旧版 agentGit
+ * mkdir -p 造出来的，会让 cs repo scan 等「见 .git 即仓库」的工具静默出错。
+ */
+export function findFakeGitShells(startDir: string, stopDir: string = os.homedir()): FakeGitShell[] {
+  const shells: FakeGitShell[] = []
+  let dir = path.resolve(startDir)
+  const stop = path.resolve(stopDir)
+  for (;;) {
+    const gitDir = path.join(dir, '.git')
+    try {
+      if (fs.statSync(gitDir).isDirectory() && !fs.existsSync(path.join(gitDir, 'HEAD')) && !fs.existsSync(path.join(gitDir, 'objects'))) {
+        const hooks = path.join(gitDir, 'hooks')
+        let managed = false
+        try {
+          managed =
+            fs.existsSync(path.join(hooks, 'agent-eyes-guard.mjs')) ||
+            fs.existsSync(path.join(hooks, 'agent-eyes-notify.mjs')) ||
+            (fs.existsSync(path.join(hooks, 'pre-commit')) && fs.readFileSync(path.join(hooks, 'pre-commit'), 'utf8').includes(MARK_BEGIN))
+        } catch {
+          /* ignore */
+        }
+        shells.push({ dir, gitDir, managedByAgentEyes: managed })
+      }
+    } catch {
+      /* .git 不存在或不可读，继续向上 */
+    }
+    const parent = path.dirname(dir)
+    if (dir === stop || parent === dir) break
+    dir = parent
+  }
+  return shells
 }
 
 /** 写文件：内容不变则跳过（避免无谓 churn），返回是否实际写入。 */
@@ -269,10 +351,25 @@ export function agentGit(options: AgentGitOptions = {}): Plugin {
         warn('未检测到 git 仓库，跳过钩子安装')
         return
       }
+      if ('error' in hooks) {
+        warn(`${hooks.error}，拒绝安装钩子`)
+        return
+      }
+
+      // 旧版事故遗留检测：向上找假 .git 壳（只报告，不自动删——误删真仓库的风险不可接受）
+      const shells = findFakeGitShells(path.dirname(hooks.toplevel))
+      for (const shell of shells) {
+        warn(
+          `检测到假 .git 壳（无 HEAD/objects${shell.managedByAgentEyes ? '，含 agent-eyes 钩子，系旧版 agentGit 误装' : ''}）：${shell.gitDir}\n` +
+            `  → 它会让 cs repo scan 等工具把 ${shell.dir} 误判为仓库。确认非真仓库后清理：mv '${shell.gitDir}' '${shell.gitDir}.fake-shell-bak'`,
+        )
+      }
+
       // 全局 hooksPath（如 lefthook）遮蔽本仓库钩子：写进去也不会被 git 调用
       if (hooks.shadowed) {
         if (options.claimHooksPath) {
-          const relativeHooksPath = path.relative(root, hooks.repoHooks)
+          // 相对 core.hooksPath 由 git 相对 toplevel 解析，基准必须是 toplevel 而非 vite root
+          const relativeHooksPath = path.relative(hooks.toplevel, hooks.repoHooks)
           if (!setLocalHooksPath(root, relativeHooksPath)) {
             warn(`无法设置本仓库 core.hooksPath：${relativeHooksPath}`)
             return
@@ -287,6 +384,11 @@ export function agentGit(options: AgentGitOptions = {}): Plugin {
         }
       }
       const hooksDir = hooks.repoHooks
+      const dirError = validateHooksDir(hooksDir, hooks.gitCommonDir, hooks.toplevel)
+      if (dirError) {
+        warn(dirError)
+        return
+      }
       try {
         fs.mkdirSync(hooksDir, { recursive: true })
       } catch {
