@@ -48,7 +48,7 @@
     "test": "vitest run",
     "compat": "npm run typecheck && npm test && npm run build",
     "build:tmp": "tsup src/index.ts src/client.ts --format esm --clean --out-dir .tmp/vite-plugin-agent-eyes-build",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build && node scripts/prepublish-gate.mjs"
   },
   "peerDependencies": {
     "vite": ">=4 <10"
