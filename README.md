@@ -7,18 +7,43 @@
 
 <img src="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/vite-plugin-agent-eyes/cs-token4ai-1784193576898095000.png" alt="Agent Eyes logo" width="88" height="88" />
 
-# vite-plugin-agent-eyes
+<h1 align="center">👀 vite-plugin-agent-eyes</h1>
 
-**给 AI agent 的自愈遥测层，也给人一道提交前风险门禁。**
+<p align="center">
+  <strong>给 AI agent 的自愈遥测层，也给人一道提交前风险门禁。</strong><br>
+  运行时日志让 agent 自己读日志、定位、修复、验证；登录态画像让 agent 快速知道当前浏览器是谁；提交前 guard 让人在 <code>git commit</code> 前先看到错误、敏感信息和屎山信号。
+</p>
 
-运行时日志让 agent 在不看代码的前提下，自己读日志、定位、修复、验证；登录态画像让 agent 快速知道当前浏览器是谁；提交前 guard 让人在 `git commit` 前先看到明显错误、敏感信息和屎山信号。
+<p align="center">
+  <a href="https://www.npmjs.com/package/vite-plugin-agent-eyes"><img src="https://img.shields.io/npm/v/vite-plugin-agent-eyes?style=for-the-badge&color=3fb950&logo=npm&label=npm" alt="npm" /></a>
+  <a href="https://www.npmjs.com/package/vite-plugin-agent-eyes"><img src="https://img.shields.io/npm/dm/vite-plugin-agent-eyes?style=for-the-badge&color=6d7f9c&label=downloads" alt="downloads" /></a>
+  <a href="https://github.com/webkubor/vite-plugin-agent-eyes/releases"><img src="https://img.shields.io/github/v/release/webkubor/vite-plugin-agent-eyes?style=for-the-badge&color=181717&label=release" alt="release" /></a>
+  <img src="https://img.shields.io/badge/runtime_deps-0-5A9E6F?style=for-the-badge" alt="deps" />
+  <img src="https://img.shields.io/badge/license-MIT-777?style=for-the-badge" alt="MIT" />
+</p>
 
-[![npm version](https://img.shields.io/npm/v/vite-plugin-agent-eyes.svg?color=cb3837&label=npm)](https://www.npmjs.com/package/vite-plugin-agent-eyes)
-[![npm downloads](https://img.shields.io/npm/dm/vite-plugin-agent-eyes.svg?color=cb3837)](https://www.npmjs.com/package/vite-plugin-agent-eyes)
-[![release](https://img.shields.io/github/v/release/webkubor/vite-plugin-agent-eyes?color=181717&label=release)](https://github.com/webkubor/vite-plugin-agent-eyes/releases)
-[![vite](https://img.shields.io/badge/Vite-%E2%9A%A1%EF%B8%8F-646cff?logo=vite&logoColor=white)](https://vitejs.dev)
-[![typescript](https://img.shields.io/badge/TypeScript-ready-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![license](https://img.shields.io/npm/l/vite-plugin-agent-eyes?color=42b883)](./LICENSE)
+<p align="center">
+  <a href="https://vitejs.dev"><img src="https://img.shields.io/badge/Vite-%E2%9A%A1%EF%B8%8F-646cff?style=for-the-badge&logo=vite&logoColor=white" alt="vite" /></a>
+  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-ready-3178c6?style=for-the-badge&logo=typescript&logoColor=white" alt="typescript" /></a>
+</p>
+
+<p align="center">
+  <a href="README.en.md">English</a> · <a href="CHANGELOG.md">更新日志</a>
+</p>
+
+</div>
+
+---
+
+## 🎯 为什么用它，而不是别的
+
+| 场景 | 手工截图发给 agent | 裸接 Vite 配置 | vite-plugin-agent-eyes |
+|---|:---:|:---:|:---:|
+| agent 看得见运行时报错 | ❌ 靠人转述 | ❌ 只有 console | ✅ API/错误/代理 header 三类结构化日志 |
+| 前端报错能自我诊断 | ❌ | ❌ | ✅ 结构化遥测 + 读屏取值 |
+| 登录态丢失能自动修 | ❌ | ❌ | ✅ 本地 cookie 自愈 |
+| 提交前看到屎山信号 | ❌ | ❌ | ✅ 提交前 guard |
+| 接入成本 | — | 中 | 低：一个 plugin + 一行 import |
 
 **📖 [完整文档](https://webkubor.github.io/vite-plugin-agent-eyes/)** · [API 参考](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-eyes) · [AGENT_GUIDE](./AGENT_GUIDE.md)
 
