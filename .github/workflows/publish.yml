@@ -49,15 +49,6 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false
 
-      # OIDC 的硬前提，不能删。npm Trusted Publishing 要求 npm CLI >= 11.5.1；
-      # 低于此版本 CLI 不会去请求 GitHub OIDC token，转而找 NODE_AUTH_TOKEN。
-      # OIDC 路径我们刻意不传它，于是回 E403 —— 报错形态与「权限不足」完全一样，
-      # 极易误判成「trusted publisher 没配对」。2026-10-08 实测：本步曾被误当作
-      # 「只对 OIDC 有意义、无用」删掉，结果 v0.15.1 连跑两次都 E403；
-      # 同族 dsh-bloom-theme 保留了这步，发布正常。
-      - name: Ensure OIDC-capable npm
-        run: npm install --global 'npm@^11.5.1'
-
       # 仓库锁的是 pnpm-lock.yaml，npm 读不了 → 只能 install，不能 ci。
       # --package-lock=false 同 compat.yml：不留一个 npm 自己造的 lockfile 干扰后续。
       - run: npm install --package-lock=false
@@ -91,6 +82,16 @@ jobs:
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
 
+
+
+      # OIDC 的硬前提，不能删。npm Trusted Publishing 要求 npm CLI >= 11.5.1；
+      # 低于此版本 CLI 不会去请求 GitHub OIDC token，转而找 NODE_AUTH_TOKEN。
+      # OIDC 路径我们刻意不传它，于是回 E403 —— 报错形态与「权限不足」完全一样，
+      # 极易误判成「trusted publisher 没配对」。2026-10-08 实测：本步曾被误当作
+      # 「只对 OIDC 有意义、无用」删掉，结果 v0.15.1 连跑两次都 E403；
+      # 同族 dsh-bloom-theme 保留了这步，发布正常。
+      - name: Ensure OIDC-capable npm
+        run: npm install --global 'npm@^11.5.1'
       - name: npm publish
         if: steps.ver.outputs.published == 'false'
         # OIDC（npm Trusted Publishing）：**不传 NODE_AUTH_TOKEN**。
