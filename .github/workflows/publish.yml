@@ -18,10 +18,19 @@ name: Publish
 # workflow 文件名 publish.yml。配好之后再把下面 publish 那步的
 # `env:` 删掉、permissions 里加 `id-token: write` 即可。
 #
-# 为什么现在必须留着 token：npm 2026 的 token 策略正在收紧
-# 「bypass 2FA 的 token 用于直接发版」，本机 `~/.npmrc` 的 webkubor token
-# 已经报 EOTP（`This operation requires a one-time password`）——
-# 也就是说本机那条兜底路也没了，CI 这条 NPM_TOKEN 是当前唯一能自动发的路。
+# 2026-10-08 实测：**当前 CI 发不出去**，卡在 npm 侧鉴权，不在本文件。
+#   - npm 上该包唯一 owner 是公司账号 `kubor`，个人号 `webkubor` 不是 owner
+#     （`npm owner ls vite-plugin-agent-eyes`），所以 webkubor 的 token 发版必 404。
+#   - 把 secret NPM_TOKEN 换成 kubor 的 token（kyvault: npm/kubor-company-token）后，
+#     错误从 E404 变成 E403 ——「能认证、但无权 PUT 这个包」，疑为 Granular Token
+#     没勾这个包 / 要求 2FA。本机 `~/.npmrc` 的 webkubor token 同样报 EOTP。
+# 解法（需要网页 + 2FA，agent 做不了），三选一：
+#   ① npmjs.com 以 kubor 登录 → 生成对 vite-plugin-agent-eyes 有 Read and write、
+#     且 Bypass 2FA 的 Granular Token → 覆写 GitHub secret NPM_TOKEN；
+#   ② 把 webkubor 加为该包 maintainer（kubor 在网页上操作）；
+#   ③ 配 Trusted Publisher（仓库 webkubor/vite-plugin-agent-eyes、workflow publish.yml），
+#      然后删掉下面 publish 步的 `env:`、permissions 里加 `id-token: write`。
+# 任一完成后：`gh run rerun <失败的 Publish run id>` 即可补发 0.15.1，无需重打 tag。
 on:
   push:
     tags: ['v*']
