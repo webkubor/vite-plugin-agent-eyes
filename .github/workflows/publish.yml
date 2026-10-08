@@ -4,14 +4,24 @@ name: Publish
 # 这里在发布前再跑一遍同样的三件套 —— 发布是最后一道门，不依赖
 # 「之前某次 CI 应该跑过了」这种假设。
 #
-# 2026-10-08：本文件原先**已经存在**（9f12793 / 589b1e0），用
-# `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` 认证。但 npm 的 classic token
-# 认证已经过时，且 token 是一次性泄漏即长期有效的凭据。改为 Trusted
-# Publishing（GitHub OIDC）：CI 用一次性短期 token 换发布权限，仓库里
-# 不存任何长期凭据，泄漏面从「npm 账号 token」缩到「单个 tag 的 5 分钟」。
-# 前提：npmjs.com 上该包已配置 trusted publisher
-# （webkubor/vite-plugin-agent-eyes + workflow 名 `publish.yml`）。
-# 未配置时 npm 报 E404 而不是权限错 —— 那是「没配」不是「配错了」。
+# 2026-10-08：本文件原先**已经存在**（9f12793 / 589b1e0），不是缺文件。
+# 本次只补它缺的三样（见下面各步骤注释），**没有**改鉴权方式。
+#
+# 曾经试过换成 npm Trusted Publishing（OIDC，`id-token: write` + 不传
+# NODE_AUTH_TOKEN），tag v0.15.1 实测失败：
+#   npm error code E404
+#   npm error 404 Not Found - PUT https://registry.npmjs.org/vite-plugin-agent-eyes
+# E404 的含义是「npmjs.com 上没给这个包配 trusted publisher」，不是权限不够。
+# 那次切换把一条本来能用的路换成了不能用的路，已改回。
+# 升级前提（需要网页 + 2FA，agent 做不了）：npmjs.com → 包 →
+# Trusted Publisher → 仓库 webkubor/vite-plugin-agent-eyes、
+# workflow 文件名 publish.yml。配好之后再把下面 publish 那步的
+# `env:` 删掉、permissions 里加 `id-token: write` 即可。
+#
+# 为什么现在必须留着 token：npm 2026 的 token 策略正在收紧
+# 「bypass 2FA 的 token 用于直接发版」，本机 `~/.npmrc` 的 webkubor token
+# 已经报 EOTP（`This operation requires a one-time password`）——
+# 也就是说本机那条兜底路也没了，CI 这条 NPM_TOKEN 是当前唯一能自动发的路。
 on:
   push:
     tags: ['v*']
@@ -20,8 +30,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read     # checkout
-      id-token: write    # npm Trusted Publishing via GitHub OIDC
+      contents: read
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -29,12 +38,6 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false
-
-      # OIDC 换 token 靠 npm CLI 自己做（>=11.5.1）；低于这个版本
-      # `npm publish` 不会去找 ACTIONS_ID_TOKEN_REQUEST_URL/TOKEN 环境变量，
-      # 会静默退回未认证请求，报出来的错跟「没配 trusted publisher」一模一样。
-      - name: Ensure OIDC-capable npm
-        run: npm install --global 'npm@^11.5.1'
 
       # 仓库锁的是 pnpm-lock.yaml，npm 读不了 → 只能 install，不能 ci。
       # --package-lock=false 同 compat.yml：不留一个 npm 自己造的 lockfile 干扰后续。
@@ -72,3 +75,5 @@ jobs:
       - name: npm publish
         if: steps.ver.outputs.published == 'false'
         run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
