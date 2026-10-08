@@ -39,6 +39,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
+      id-token: write   # npm Trusted Publishing via GitHub OIDC
       contents: read
     steps:
       - uses: actions/checkout@v6
@@ -83,6 +84,9 @@ jobs:
 
       - name: npm publish
         if: steps.ver.outputs.published == 'false'
+        # OIDC（npm Trusted Publishing）：**不传 NODE_AUTH_TOKEN**。
+        # token 路径现在会回 E403（npm 2026 策略限制 bypass-2FA token 直接发版），
+        # 而 owner 已在 npmjs.com 给 webkubor/vite-plugin-agent-eyes 配好 Trusted Publisher：
+        #   Organization: webkubor | Repository: webkubor/vite-plugin-agent-eyes
+        #   Workflow filename: publish.yml | Environment name: 留空
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
