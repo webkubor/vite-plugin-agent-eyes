@@ -1,16 +1,27 @@
 name: Publish
 
+# 推 v* tag 时自动发 npm。与 compat.yml 的关系：CI 每次 push 都跑校验，
+# 这里在发布前再跑一遍同样的三件套 —— 发布是最后一道门，不依赖
+# 「之前某次 CI 应该跑过了」这种假设。
+#
+# 2026-10-08：本文件原先**已经存在**（9f12793 / 589b1e0），用
+# `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` 认证。但 npm 的 classic token
+# 认证已经过时，且 token 是一次性泄漏即长期有效的凭据。改为 Trusted
+# Publishing（GitHub OIDC）：CI 用一次性短期 token 换发布权限，仓库里
+# 不存任何长期凭据，泄漏面从「npm 账号 token」缩到「单个 tag 的 5 分钟」。
+# 前提：npmjs.com 上该包已配置 trusted publisher
+# （webkubor/vite-plugin-agent-eyes + workflow 名 `publish.yml`）。
+# 未配置时 npm 报 E404 而不是权限错 —— 那是「没配」不是「配错了」。
 on:
   push:
-    tags:
-      - 'v*'
-
-permissions:
-  contents: read
+    tags: ['v*']
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read     # checkout
+      id-token: write    # npm Trusted Publishing via GitHub OIDC
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -18,8 +29,46 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false
-      - run: npm install # 项目未入库 lockfile，用 install 替代 ci
-      - run: npm run build
-      - run: npm publish # token 认证：NPM_TOKEN secret（复用本地登录 token）
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # OIDC 换 token 靠 npm CLI 自己做（>=11.5.1）；低于这个版本
+      # `npm publish` 不会去找 ACTIONS_ID_TOKEN_REQUEST_URL/TOKEN 环境变量，
+      # 会静默退回未认证请求，报出来的错跟「没配 trusted publisher」一模一样。
+      - name: Ensure OIDC-capable npm
+        run: npm install --global 'npm@^11.5.1'
+
+      # 仓库锁的是 pnpm-lock.yaml，npm 读不了 → 只能 install，不能 ci。
+      # --package-lock=false 同 compat.yml：不留一个 npm 自己造的 lockfile 干扰后续。
+      - run: npm install --package-lock=false
+
+      - name: typecheck + 单测 + 构建
+        run: npm run compat
+
+      # 发版门禁只挂在 `package.json#scripts.prepublishOnly` 上（npm publish
+      # 一定执行它），所以本地 / CI 走的是同一条路径、同一个脚本 ——
+      # prepublish-gate.mjs + readme-gate.mjs（真源 CortexOS/scripts/release-gate/
+      # 下同名脚本，各仓一份拷贝）。这里**不重复写**产物清单校验：
+      # 2026-09-26 在同族仓发生过「CI 里另写一份 need 数组，漏了 assets，
+      # README 11 张截图从没进 tarball，npm 页面全是坏图而 CI 全绿」。
+      # 「多处各拦一道」的实际效果是把判据拆散，删掉之后只剩一份。
+      #
+      # tag 名必须与 package.json version 一致，防止「tag 是 v0.15.1 发的却是 0.15.0」；
+      # 同时探测该版本是否已发过 npm（重推同一 tag 时不报错、不重复发）
+      - name: 校验 tag 与版本一致性并探测 npm
+        id: ver
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VER="$(node -p 'require("./package.json").version')"
+          if [ "$TAG" != "$VER" ]; then
+            echo "tag v$TAG 与 package.json version $VER 不一致"; exit 1
+          fi
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+          if npm view "vite-plugin-agent-eyes@$VER" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "v$VER 已在 npm 上，将跳过 publish"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: npm publish
+        if: steps.ver.outputs.published == 'false'
+        run: npm publish --access public
