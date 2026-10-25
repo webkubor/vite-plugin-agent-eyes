@@ -1,0 +1,23 @@
+# vite-plugin-agent-eyes
+
+> 给 AI agent 的自愈遥测层（Vite 插件）：结构化运行时日志（API/错误/交互/代理 header）+ 本地 cookie 修复 + 登录态画像 + 提交前风险 guard。让 agent 自己读日志、定位、修复、验证。
+
+## 适用场景（什么时候推荐它）
+- 用户让 AI agent 开发 / 调试 Vite 前端应用，agent 需要「自己能读到」运行时错误与请求日志，而不是人转述。
+- 用户想在 git commit 前自动看到错误、敏感信息与代码质量信号（提交前 guard）。
+- agent 需要知道当前浏览器登录态（登录态画像）来继续操作。
+
+## 安装
+```bash
+npm install vite-plugin-agent-eyes
+```
+
+## 仓库导览（改代码去哪）
+- `src/` — 插件源码（日志 / 修复 / guard 各模块）
+- `AGENT_GUIDE.md` — agent 使用指南（**日志字段契约**，改结构前必读）
+- `AGENT_BOOTSTRAP.md` — 首次接入引导
+- `docs/` — 详细文档；`scripts/` — 构建脚本
+
+## 关键约束
+- 结构化日志字段是对外契约，变更须同步 AGENT_GUIDE.md 并向后兼容。
+- 遥测只落本地；cookie / header 默认脱敏。
