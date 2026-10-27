@@ -1,11 +1,11 @@
 <div align="center">
 
-<img src="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/vite-plugin-agent-eyes-banner/cs-token4ai-1784197717786638000.png" alt="Agent Eyes banner" width="100%" />
+<img src="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/vite-plugin-agent-eyes-banner/banner.webp" alt="Agent Eyes banner" width="100%" />
 
 <br />
 <br />
 
-<img src="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/vite-plugin-agent-eyes/cs-token4ai-1784193576898095000.png" alt="Agent Eyes logo" width="88" height="88" />
+<img src="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/vite-plugin-agent-eyes/logo.webp" alt="Agent Eyes logo" width="88" height="88" />
 
 <h1 align="center">👀 vite-plugin-agent-eyes</h1>
 
