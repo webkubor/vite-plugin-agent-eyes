@@ -5,7 +5,7 @@
 <br />
 <br />
 
-<img src="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/vite-plugin-agent-eyes/logo.webp" alt="Agent Eyes logo" width="88" height="88" />
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/vite-plugin-agent-eyes/mark-v3-dark.svg"><img src="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/vite-plugin-agent-eyes/mark-v3.svg" alt="Agent Eyes logo" width="88" height="88" /></picture>
 
 <h1 align="center">👀 vite-plugin-agent-eyes</h1>
 
