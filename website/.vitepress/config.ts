@@ -1,9 +1,9 @@
 import { defineConfig } from 'vitepress'
 
 const agentEyesLogo =
-  'https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/vite-plugin-agent-eyes/cs-token4ai-1784193576898095000.png'
+  'https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/vite-plugin-agent-eyes/logo.webp'
 const agentEyesBanner =
-  'https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/vite-plugin-agent-eyes-banner/cs-token4ai-1784197717786638000.png'
+  'https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/vite-plugin-agent-eyes-banner/banner.webp'
 
 // GitHub Pages 部署在 https://webkubor.github.io/vite-plugin-agent-eyes/
 // 必须设 base 为仓库子路径，否则静态资源 404

@@ -6,7 +6,7 @@ hero:
   text: 让你和 AI agent 都看清浏览器里发生了什么
   tagline: 把 fetch 看不到的 cookie、转瞬即逝的错误、对不上的接口字段，全部落成结构化日志。还有本地 cookie 修复和提交前风险门禁。
   image:
-    src: https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/vite-plugin-agent-eyes/cs-token4ai-1784193576898095000.png
+    src: https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/vite-plugin-agent-eyes/logo.webp
     alt: Agent Eyes
   actions:
     - theme: brand
