@@ -13,7 +13,7 @@ Thanks for your interest in contributing!
 ## Development Setup
 
 ```bash
-git clone https://github.com/webkubor/agent-eyes.git
+git clone git@github.com:webkubor/agent-eyes.git
 cd agent-eyes
 # Follow the Quick Start in README
 ```
