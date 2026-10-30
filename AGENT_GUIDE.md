@@ -39,7 +39,7 @@ After the dev server starts, read:
 
 1. `log/README.md` for the current generated instructions.
 2. `log/instances.json` to identify the active dev port.
-3. `log/project-guide.json` for project type, layer, route/API/config, and alias suggestions.
+3. `log/project-guide.json` for project type, layer, route/API/config, alias, environment/script diagnostics, and instruction-document size warnings. `configuration.issues` contains `code`, relative `file`, optional `line`, and a redacted `message`; `configuration.mode`, `envDir`, `envPrefix`, `scannedFiles`, and `truncated` describe the scan. `instructions.documents` contains relative `file`, `lines`, `bytes`, and `oversized`; `instructions.warnings` lists the size warnings. Existing `detected` and `suggestions` remain available. The report never contains environment variable values or endpoint URLs.
 4. `log/<port>/README.md` for the port-specific log map.
 
 Do not read stale logs from a different port. Logs are recreated on each dev-server start.

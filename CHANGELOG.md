@@ -2,6 +2,13 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+- `agentProjectGuide` 默认体检最终 Vite 配置、环境变量静态引用和直接 Vite scripts 的模式适配；报告缺失变量、前缀不匹配、客户端 `process.env`、配置尚未加载的环境键、孤立模式文件与疑似硬编码请求地址，报告不含变量值或 URL。
+- 项目内 `AGENT.md` / `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` 默认达到 200 行或 16 KiB 时预警，可用 `projectGuide.instructions` 调整或关闭；相关文件保存后更新体检报告。
+- 导出 `inspectConfiguration`、`inspectInstructions` 和相关类型，供独立脚本复用；扫描有文件大小与数量边界，未覆盖范围显式提示。
+
 ## [0.15.1] - 2026-09-15
 
 ### Fixed

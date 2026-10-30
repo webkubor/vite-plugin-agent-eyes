@@ -46,6 +46,10 @@ export { agentSizeWatch }
 export type { AgentSizeWatchOptions }
 export { agentProjectGuide, inspectProject, aliasMatchesResolved }
 export type { AgentProjectGuideOptions, AgentProjectGuideReport, InspectProjectInternalOptions }
+export { inspectConfiguration } from './project-diagnostics'
+export type { ConfigurationInspectionOptions, ConfigurationInspection, DiagnosticIssue } from './project-diagnostics'
+export { inspectInstructions, isInstructionDocument } from './instruction-check'
+export type { InstructionCheckOptions, InstructionInspection, InstructionDocument } from './instruction-check'
 export {
   agentGuard,
   createGuardHookScript,
@@ -536,7 +540,7 @@ const MANIFEST = `# Agent 自愈遥测（log/）
 
 ## 排查顺序（读日志 → 定位 → 改 → 重启 dev → 再读验证）
 
-1. **../project-guide.json** —— 先看项目类型、API/业务/路由/配置层级和 \`@\` alias 建议，决定从哪下钻。
+1. **../project-guide.json** —— 先看项目类型、目录层级、alias、环境变量与 scripts 诊断，以及 agent 指令文档体积预警。
 2. **errors.log** —— 再看"哪坏了"：顶部是 Top Errors（聚合去重 + 频率），下方是最近原始记录。
 3. **console.log** —— 全级别控制台输出（log/warn/error/info/debug），React dev warning、库 deprecation 警告都在这里。
 4. **interaction.log** —— click/input/change/submit/route 脱敏交互轨迹，用来还原复现路径（表单值只记 <redacted>）。
@@ -598,7 +602,7 @@ const ROOT_MANIFEST = `# Agent 遥测日志（按 dev 端口隔离）
 - 你的 dev 端口看 \`cs dev\` / vite 启动输出（如 5175）。
 - 你的日志在 \`log/<你的端口>/\`：\`errors.log\` / \`console.log\` / \`interaction.log\` / \`api-calls.log\` / \`proxy-*.log\` / \`auth-state.json\` / \`snapshots/\`。
 - \`instances.json\` 列出当前在写日志的端口 / 分支 / pid，方便确认你该读哪个。
-- \`project-guide.json\` 是项目结构体检：项目类型、API/业务/路由/配置层级、alias 和建议。
+- \`project-guide.json\` 是项目体检：结构、alias、配置环境变量/scripts 诊断及 agent 指令文档体积预警。
 
 读法见 \`log/<port>/README.md\`。
 `

@@ -8,7 +8,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { ViteDevServer } from 'vite'
-import { describe, expect, it } from 'vitest'
+import { EventEmitter } from 'node:events'
+import { describe, expect, it, vi } from 'vitest'
 import { agentProjectGuide, aliasMatchesResolved, inspectProject } from '../src/project-guide'
 
 function tempRoot(): string {
@@ -56,6 +57,20 @@ describe('inspectProject', () => {
     expect(report.suggestions).toEqual([])
   })
 
+  it('includes instruction warnings in the report and allows disabling each diagnostic', () => {
+    const root = tempRoot()
+    write(root, 'package.json', JSON.stringify({ devDependencies: { vite: '^8.0.0' } }))
+    write(root, 'AGENTS.md', 'a\nb\nc')
+    write(root, 'src/main.ts', 'console.log(import.meta.env.VITE_MISSING)')
+    const report = inspectProject(root, { instructions: { warnLines: 3 } })
+    expect(report.instructions?.documents[0]).toMatchObject({ file: 'AGENTS.md', oversized: true })
+    expect(report.suggestions.join('\n')).toContain('AGENTS.md')
+    expect(report.configuration?.issues.some((issue) => issue.code === 'ENV_MISSING')).toBe(true)
+    const disabled = inspectProject(root, { instructions: false, configuration: false })
+    expect(disabled.instructions).toBeUndefined()
+    expect(disabled.configuration).toBeUndefined()
+  })
+
   it('suggests missing layers and alias for sparse projects', () => {
     const root = tempRoot()
     write(root, 'package.json', JSON.stringify({ devDependencies: { vite: '^5.0.0' } }))
@@ -91,6 +106,42 @@ describe('inspectProject', () => {
     expect(byInferenceTrue.detected.alias).toBe(true)
     const withRuntimeFalse = inspectProject(root, { resolvedAlias: false })
     expect(withRuntimeFalse.detected.alias).toBe(false)
+  })
+})
+
+describe('project guide refresh', () => {
+  it('refreshes nested instruction warnings on save and detaches watchers on close', () => {
+    vi.useFakeTimers()
+    try {
+      const root = tempRoot()
+      const warnings: string[] = []
+      const server = fakeServer(root, warnings)
+      const watcher = new EventEmitter()
+      const http = new EventEmitter()
+      Object.assign(server, { watcher, httpServer: http })
+      const plugin = agentProjectGuide({ instructions: { warnLines: 3 } })
+      if (typeof plugin.configureServer !== 'function') throw new Error('missing hook')
+      ;(plugin.configureServer as (this: unknown, server: ViteDevServer) => void).call({}, server)
+      const file = path.join(root, 'src/AGENTS.md')
+      write(root, 'src/AGENTS.md', 'a\nb\nc')
+      watcher.emit('add', file)
+      vi.advanceTimersByTime(110)
+      const report = JSON.parse(fs.readFileSync(path.join(root, 'log/project-guide.json'), 'utf8'))
+      expect(report.instructions.documents[0].oversized).toBe(true)
+      expect(warnings.some((item) => item.includes('AGENTS.md'))).toBe(true)
+      http.emit('close')
+      expect(watcher.listenerCount('change')).toBe(0)
+      // middlewareMode 没有 httpServer，依赖插件关闭钩子释放资源。
+      const middleware = fakeServer(root, warnings)
+      const middlewareWatcher = new EventEmitter()
+      Object.assign(middleware, { watcher: middlewareWatcher, httpServer: null })
+      const middlewarePlugin = agentProjectGuide()
+      if (typeof middlewarePlugin.configureServer !== 'function' || typeof middlewarePlugin.closeBundle !== 'function') throw new Error('missing hooks')
+      ;(middlewarePlugin.configureServer as (this: unknown, server: ViteDevServer) => void).call({}, middleware)
+      expect(middlewareWatcher.listenerCount('change')).toBe(1)
+      ;(middlewarePlugin.closeBundle as (this: unknown) => void).call({})
+      expect(middlewareWatcher.listenerCount('change')).toBe(0)
+    } finally { vi.useRealTimers() }
   })
 })
 

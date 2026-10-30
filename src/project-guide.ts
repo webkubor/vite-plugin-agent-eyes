@@ -6,7 +6,9 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import type { Plugin } from 'vite'
+import type { Plugin, ResolvedConfig } from 'vite'
+import { inspectInstructions, type InstructionCheckOptions, type InstructionInspection } from './instruction-check'
+import { inspectConfiguration, type ConfigurationInspectionOptions } from './project-diagnostics'
 
 const CONFIG_FILES = ['vite.config.ts', 'vite.config.js', 'vite.config.mts', 'vite.config.mjs']
 const TS_CONFIG_FILES = ['tsconfig.json', 'jsconfig.json']
@@ -28,6 +30,10 @@ export interface AgentProjectGuideOptions {
   alias?: string
   /** 是否在控制台输出建议摘要，默认 true。 */
   warn?: boolean
+  /** 配置、环境变量和 scripts 适配检查；false 关闭。 */
+  configuration?: ConfigurationInspectionOptions | false
+  /** agent 指令文档体积检查；默认 200 行 / 16 KiB，false 关闭。 */
+  instructions?: InstructionCheckOptions | false
 }
 
 /** 项目结构体检报告。 */
@@ -46,6 +52,8 @@ export interface AgentProjectGuideReport {
     configLayer: string[]
   }
   suggestions: string[]
+  configuration?: ReturnType<typeof inspectConfiguration>
+  instructions?: InstructionInspection
 }
 
 function exists(root: string, rel: string): boolean {
@@ -187,6 +195,8 @@ export interface InspectProjectInternalOptions extends AgentProjectGuideOptions 
    * 传了就以它为准（true/false 都采信），不再做文本/tsconfig 推断 —— runtime-truth。
    */
   resolvedAlias?: boolean
+  /** 插件注入的最终 Vite 配置，优先于静态推断。 */
+  resolvedConfig?: ResolvedConfig
 }
 
 /**
@@ -230,7 +240,22 @@ export function inspectProject(root: string, options: InspectProjectInternalOpti
     configLayer: sourceDir ? findLayerDirs(root, sourceDir, CONFIG_DIRS) : [],
   }
   const base = { projectType: detected.frameworks[0] ?? 'Vite', sourceDir, detected }
-  return { ...base, suggestions: suggestionList(base, alias) }
+  const configuration = options.configuration === false ? undefined : inspectConfiguration(root, {
+    sourceDir: sourceDir ?? undefined,
+    ...options.configuration,
+    ...(options.resolvedConfig ? { resolvedConfig: options.resolvedConfig } : {}),
+  })
+  const instructions = options.instructions === false ? undefined : inspectInstructions(root, options.instructions)
+  return {
+    ...base,
+    configuration,
+    instructions,
+    suggestions: [
+      ...suggestionList(base, alias),
+      ...(configuration?.issues.map((issue) => `${issue.file}${issue.line ? `:${issue.line}` : ''} [${issue.code}] ${issue.message}`) ?? []),
+      ...(instructions?.warnings ?? []),
+    ],
+  }
 }
 
 function loggerPrefix(): string {
@@ -239,7 +264,9 @@ function loggerPrefix(): string {
 
 /** dev 启动时输出项目结构体检报告和建议。 */
 export function agentProjectGuide(options: AgentProjectGuideOptions = {}): Plugin {
+  let cleanup: (() => void) | undefined
   return {
+    closeBundle() { cleanup?.() },
     name: 'vite-plugin-agent-eyes-project-guide',
     apply: 'serve',
     configureServer(server) {
@@ -248,14 +275,41 @@ export function agentProjectGuide(options: AgentProjectGuideOptions = {}): Plugi
       // runtime-truth：configureServer 时 config 已 resolve，config.resolve.alias 是 vite 规范化后的
       // 真实 alias —— 优先采信，而不是靠 tsconfig/vite 配置文本推断。
       const resolvedAlias = aliasMatchesResolved(server.config.resolve?.alias, options.alias ?? '@')
-      const report = inspectProject(root, { ...options, resolvedAlias })
       const logDir = path.resolve(root, options.logDir ?? 'log')
-      fs.mkdirSync(logDir, { recursive: true })
-      fs.writeFileSync(path.join(logDir, 'project-guide.json'), JSON.stringify(report, null, 2))
-      if ((options.warn ?? true) && report.suggestions.length) {
-        server.config.logger.warn(`${loggerPrefix()} 项目结构建议 ${report.suggestions.length} 条，详见 ${path.relative(root, path.join(logDir, 'project-guide.json'))}`)
-        report.suggestions.slice(0, 5).forEach((item) => server.config.logger.warn(`${loggerPrefix()} ${item}`))
+      const reportFile = path.join(logDir, 'project-guide.json')
+      const refresh = () => {
+        const report = inspectProject(root, { ...options, resolvedAlias, resolvedConfig: server.config })
+        fs.mkdirSync(logDir, { recursive: true })
+        fs.writeFileSync(reportFile, JSON.stringify(report, null, 2))
+        if ((options.warn ?? true) && report.suggestions.length) {
+          server.config.logger.warn(`${loggerPrefix()} 项目体检建议 ${report.suggestions.length} 条，详见 ${path.relative(root, reportFile)}`)
+          report.suggestions.slice(0, 5).forEach((item) => server.config.logger.warn(`${loggerPrefix()} ${item}`))
+          // 指令文件体积预警不能被前五条结构建议遮住。
+          report.instructions?.warnings.filter((item) => !report.suggestions.slice(0, 5).includes(item))
+            .forEach((item) => server.config.logger.warn(`${loggerPrefix()} ${item}`))
+        }
       }
+      refresh()
+      if (!server.watcher) return
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const onFile = (file: string) => {
+        const rel = path.relative(root, file)
+        if (rel.startsWith('..') || path.isAbsolute(rel) || path.resolve(file) === reportFile) return
+        if (/(?:^|[\\/])(?:node_modules|dist|build|coverage|log)(?:[\\/]|$)/.test(rel) || /(?:^|[\\/])\.[^\\/]+[\\/]/.test(rel)) return
+        if (!/\.(?:[cm]?[jt]sx?|vue|svelte|astro|md|json)$/i.test(rel) && !path.basename(file).startsWith('.env')) return
+        if (path.basename(file).startsWith('.env')) {
+          if (options.warn ?? true) server.config.logger.warn(`${loggerPrefix()} 环境文件已变更；环境诊断使用 Vite 当前解析快照，重启 dev server 后生效。`)
+          return
+        }
+        clearTimeout(timer)
+        timer = setTimeout(refresh, 100)
+      }
+      server.watcher.on('add', onFile).on('change', onFile).on('unlink', onFile)
+      cleanup = () => {
+        clearTimeout(timer)
+        server.watcher.off('add', onFile).off('change', onFile).off('unlink', onFile)
+      }
+      server.httpServer?.once('close', cleanup)
     },
   }
 }
