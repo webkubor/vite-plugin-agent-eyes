@@ -174,6 +174,7 @@ export interface BannerConfig {
   mode?: string
   define?: Record<string, unknown>
   envDir?: string | false
+  publicDir?: string | false
   logLevel?: string
   server?: { port?: number; proxy?: Record<string, unknown> }
   resolve?: { alias?: Array<{ find: string | RegExp; replacement: string }> }
@@ -258,6 +259,7 @@ export function collectBannerInfo(
     tsPaths: hasTsPaths(root),
     engineering: inspectEngineering(root, {
       mode,
+      publicDir: config.publicDir,
       sourceDir: options.sourceDir,
       envDir: typeof config.envDir === 'string' ? config.envDir : undefined,
     }),
@@ -308,7 +310,24 @@ function buildRows(info: BannerInfo): Row[] {
   })
   rows.push({ label: '技术栈', value: info.stack.length ? info.stack.join(' · ') : '未识别' })
   rows.push({ label: '工程', value: truncateWidth(`${stateText} · ${requestText}`, 72) })
+  rows.push({ label: '爬虫', value: truncateWidth(crawlerText(info.engineering.crawler), 72) })
   return rows
+}
+
+/** 爬虫可读性一行：robots / sitemap / llms.txt / noindex 的实际状态。 */
+function crawlerText(crawler: EngineeringInspection['crawler']): string {
+  const parts: string[] = []
+  if ([crawler.robots, crawler.sitemap, crawler.llms].some((item) => item.status === 'unknown')) return '部分配置无法读取 · 详见可视化面板'
+  if (!crawler.robots.file && !crawler.sitemap.file) parts.push('未配置 robots / sitemap')
+  else {
+    parts.push(crawler.robots.file ? 'robots ✓' : 'robots ✗')
+    parts.push(crawler.sitemap.file ? `sitemap ${crawler.sitemap.valid ? `${crawler.sitemap.urlCount ?? 0} 条` : '无效'}` : 'sitemap ✗')
+  }
+  parts.push(crawler.llms.file ? 'llms.txt ✓' : 'llms.txt ✗')
+  if (crawler.indexHtml.noindex) parts.push('⚠ noindex')
+  if (crawler.robots.disallowAll) parts.push('⚠ Disallow: /')
+  if ([crawler.robots, crawler.sitemap, crawler.llms].some((item) => item.file && item.deployment === 'root-source')) parts.push('含源码候选，待验证部署')
+  return parts.join(' · ')
 }
 
 /**
@@ -361,6 +380,7 @@ export function agentBanner(options: AgentBannerOptions = {}): Plugin {
           mode: server.config.mode,
           define: server.config.define as Record<string, unknown>,
           envDir: server.config.envDir,
+          publicDir: server.config.publicDir,
           resolve: server.config.resolve,
           server: { port: server.config.server.port, proxy: server.config.server.proxy as Record<string, unknown> },
         }, { ...options, port })

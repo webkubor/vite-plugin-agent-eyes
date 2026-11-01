@@ -57,7 +57,7 @@ Do not read stale logs from a different port. Logs are recreated on each dev-ser
 5. `log/<port>/auth-state.json`  
    Use this to identify the last successful local login profile. It contains only sanitized account hints, not tokens/cookies.
 6. `log/<port>/snapshots/`  
-   Use screenshots and DOM snapshots for visual or rendered-structure issues.
+   Use screenshots and DOM snapshots for visual or rendered-structure issues. `snapshots/index.json` lists up to 100 recent screenshots; each PNG has a same-name JSON sidecar containing `project`, `pathname`, sanitized `origin` (no query/fragment/credentials), `time`, relative `file`, `engine`, `browser`, and `reason`. A temporary project/route/time label is applied during capture and removed afterward. CDP selects a unique tab by origin + pathname; no matching page means no screenshot. The default page badge opens `/__agent-eyes?page=<encoded origin+pathname>` for crawler checks, browser capability, and manual capture. `GET /__agent-eyes/status?page=...` returns the same facts; `POST /__agent-eyes/capture?page=...` captures only a same-host page without navigating. `agentEyes({ visual: false })` disables the panel; `telemetry.screenshots: false` disables panel capture unless explicitly overridden by visual options. `engineering.crawler` in `project-guide.json` adds `robots`, `sitemap`, `llms`, `indexHtml`, `suggestions`, and `limitations`; file status/deployment distinguishes present, missing, unknown and public versus source candidates. Local file detection does not establish production crawlability or indexing.
 7. `log/guard-report.json`  
    Use this when a commit is blocked or the user wants pre-submit risk review.
 

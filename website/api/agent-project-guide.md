@@ -19,6 +19,7 @@
 | scripts 与硬编码 | 核对直接运行的 Vite scripts 的 `--mode` 和孤立 `.env.<mode>`；对 API 请求地址和代理目标中的固定 URL 发出启发式提醒 |
 | agent 指令文档 | 扫描 `AGENT.md`、`AGENTS.md`、`CLAUDE.md`、`GEMINI.md`，默认达到 200 行或 16 KiB 预警 |
 | 工程完备度 | 环境文件覆盖（development / test / production）、状态管理（Pinia / Vuex / Zustand / Redux）是否安装并初始化、axios / ky 是否有统一请求封装且 baseURL 读环境变量 |
+| 爬虫可读性 | `robots.txt`（是否声明 Sitemap、是否 `Disallow: /`）、`sitemap.xml`（是否合法、约多少条）、`llms.txt`、`index.html` 的 `noindex` / canonical / title |
 
 ## 单独使用
 

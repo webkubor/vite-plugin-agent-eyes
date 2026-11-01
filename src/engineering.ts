@@ -9,6 +9,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { inspectCrawler, type CrawlerInspection } from './crawler'
 
 /** 工程体检选项。 */
 export interface EngineeringInspectionOptions {
@@ -18,6 +19,8 @@ export interface EngineeringInspectionOptions {
   envDir?: string
   /** 当前模式，用于标记当前使用的环境文件。 */
   mode?: string
+  /** Vite public 目录；false 表示不部署 public 文件。 */
+  publicDir?: string | false
 }
 
 /** 环境文件覆盖情况。 */
@@ -54,6 +57,8 @@ export interface EngineeringInspection {
   environments: EnvironmentCoverage
   state: StateInspection
   request: RequestInspection
+  /** 爬虫 / AI 可读性：robots、sitemap、llms.txt、index.html 元信息。 */
+  crawler: CrawlerInspection
   /** 面向 agent / 人的改进建议（不阻断）。 */
   suggestions: string[]
 }
@@ -174,5 +179,7 @@ export function inspectEngineering(root: string, options: EngineeringInspectionO
   if (request.unifiedFile && !request.envBase) {
     suggestions.push(`${request.unifiedFile} 的 baseURL 未读取环境变量；建议按环境切换，避免地址写死。`)
   }
-  return { environments, state, request, suggestions }
+  const crawler = inspectCrawler(root, { publicDir: options.publicDir })
+  suggestions.push(...crawler.suggestions)
+  return { environments, state, request, crawler, suggestions }
 }

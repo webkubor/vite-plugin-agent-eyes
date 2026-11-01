@@ -98,6 +98,7 @@ export default defineConfig({
             { text: 'agentGuard()', link: '/api/agent-guard' },
             { text: 'agentSizeWatch()', link: '/api/agent-size-watch' },
             { text: 'agentBanner()', link: '/api/agent-banner' },
+            { text: '可视化面板与路由截图', link: '/guide/visual' },
             { text: 'agentVersion()', link: '/api/agent-version' },
           ],
         },

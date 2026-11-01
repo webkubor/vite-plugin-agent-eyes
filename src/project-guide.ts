@@ -257,6 +257,7 @@ export function inspectProject(root: string, options: InspectProjectInternalOpti
       ? path.relative(root, options.resolvedConfig.envDir) || '.'
       : undefined,
     ...options.engineering,
+    ...(options.resolvedConfig ? { publicDir: options.resolvedConfig.publicDir } : {}),
   })
   return {
     ...base,

@@ -5,6 +5,9 @@
 ## [Unreleased]
 
 ### Added
+- 默认网页 Agent Eyes 入口与本地可视化面板：爬虫配置、当前项目/路由、浏览器内核提示、实测 CDP 截图能力及手动截图。`visual: false` 可关闭。
+- 爬虫体检支持 Vite publicDir、robots 通配组 / Sitemap 声明、sitemap 根节点、llms.txt、HTML noindex / canonical / title；区分源码候选、public 候选和 unknown，结果进入启动横幅与工程报告。
+- 路由截图按 origin + pathname 唯一匹配标签页，附项目/路由/时间临时标记，保存 PNG、JSON 元数据与最近 100 条索引。错误上报携带去 query/hash 的页面地址；不再任取第一个标签页。
 - `agentProjectGuide` 默认体检最终 Vite 配置、环境变量静态引用和直接 Vite scripts 的模式适配；报告缺失变量、前缀不匹配、客户端 `process.env`、配置尚未加载的环境键、孤立模式文件与疑似硬编码请求地址，报告不含变量值或 URL。
 - 项目内 `AGENT.md` / `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` 默认达到 200 行或 16 KiB 时预警，可用 `projectGuide.instructions` 调整或关闭；相关文件保存后更新体检报告。
 - 导出 `inspectConfiguration`、`inspectInstructions` 和相关类型，供独立脚本复用；扫描有文件大小与数量边界，未覆盖范围显式提示。

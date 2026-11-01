@@ -100,6 +100,7 @@ export default defineConfig({
 | **运行时日志** | API / 错误 / 控制台 / 交互轨迹落成结构化日志，agent 直接读 | [日志总览](https://webkubor.github.io/vite-plugin-agent-eyes/guide/logs) |
 | **代理层日志** | `Cookie` / `Set-Cookie` / status —— fetch 看不到的那层 | [agentProxy](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-proxy) |
 | **错误截图 + DOM 快照** | 默认开启；出错自动截图（CDP 自动探测端口）+ dump DOM | [快照](https://webkubor.github.io/vite-plugin-agent-eyes/guide/snapshots) |
+| **可视化面板** | 默认网页入口，robots/sitemap/llms.txt 探测、浏览器 CDP 状态、带项目路由标记的截图 | [可视化面板](https://webkubor.github.io/vite-plugin-agent-eyes/guide/visual) |
 | **启动横幅** | 控制台一眼看到环境、`.env` 覆盖、上报端点、代理、别名、版本、技术栈、工程完备度 | [agentBanner](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-banner) |
 | **工程体检** | 环境文件（dev/test/prod）、Pinia 是否初始化、axios/ky 是否统一封装 | [agentProjectGuide](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-project-guide) |
 | **版本戳记** | 注入 `__APP_VERSION__` / tag / commit，dev 暴露 `/__version` | [agentVersion](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-version) |

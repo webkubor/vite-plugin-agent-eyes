@@ -37,8 +37,8 @@ agentEyes({
   git: {
     precommit: ['pnpm typecheck'],
   },
-  banner: true,   // 默认开启，可传 false 关闭
-  version: true,  // 默认开启，可传 false 关闭
+  banner: {},   // 默认开启，可传 false 关闭
+  version: {},  // 默认开启，可传 false 关闭
 })
 ```
 
@@ -52,7 +52,8 @@ agentEyes({
 | `git` | `{ guard }` | 传给 `agentGit()`；`false` 关闭默认 git hook |
 | `agentDocs` | `true` | 把日志读法写进已有 agent 指令文件；`false` 关闭 |
 | `version` | `true` | 版本 / tag / commit 戳记（`__APP_VERSION__` 等 + dev `/__version`）；`false` 关闭 |
-| `banner` | `true` | dev 启动控制台横幅：环境、环境文件、上报端点、代理、别名、版本、技术栈、工程完备度；`false` 关闭 |
+| `banner` | `{}` | dev 启动控制台横幅：环境、环境文件、上报端点、代理、别名、版本、技术栈、工程完备度；`false` 关闭 |
+| `visual` | `{}` | 默认网页入口、本地爬虫面板、CDP 能力与当前路由截图；`false` 关闭，见[可视化面板](../guide/visual) |
 
 ### 启动横幅示例
 

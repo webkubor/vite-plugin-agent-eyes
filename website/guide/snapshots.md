@@ -71,14 +71,14 @@ open -a "Google Chrome" --args --remote-debugging-port=9222
 
 - **出错时**（前端 error / unhandledrejection / API 失败），自动生成快照文件到 `log/<port>/snapshots/`，文件名带时间戳：
   - `dom-{timestamp}.html` —— 始终生成
-  - `err-{timestamp}.png` —— 仅当 `screenshots: true` 且 CDP 可用时生成
+  - `err-<route>-<timestamp>-<id>.png` —— 默认开启且匹配页面 CDP 可用时生成；对应 JSON 和 index.json 关联项目与路由
 - **日志目录**：默认在项目根的 `log/` 下，按 dev server 端口分子目录，例如 `log/5173/snapshots/`。
 - **每次启动清空**：同 `errors.log` 等运行时日志一样，dev server 重启会清空本端口目录，最新记录在最上方。
 - **怎么验证你配对了**：
   1. 配好后跑一次会触发错误（例如手动 `throw` 一个错，或访问一个会 500 的接口）。
   2. 打开 `log/<port>/snapshots/`，应能看到带时间戳的 `dom-*.html` 文件；开了截图的还能看到 `err-*.png`。
   3. 用浏览器打开那个 `.html`，能还原出出错那一刻的 DOM 结构；`.png` 就是当时的页面截图。
-  4. 如果开了 `screenshots: true` 却没生成 PNG——多半是 Chrome 没带 `--remote-debugging-port` 启动（见上面"前置条件"）。
+  4. 如果没生成 PNG——检查 Chrome 是否启用了 CDP、是否存在唯一匹配 origin + pathname 的页面；网页右下角 Agent Eyes 面板会显示能力状态，见[路由截图](./visual)。
 
 > **提示**：DOM 快照只抓 `body.innerHTML`，不含 computed styles / 伪元素，纯视觉问题（颜色、间距、伪元素样式）仍依赖 CDP 截图。
 

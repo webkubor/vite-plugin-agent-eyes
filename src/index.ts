@@ -9,6 +9,7 @@ import { agentGit, type AgentGitOptions, type AgentGitWebhook, type CommitInfo }
 import { syncAgentInstructions } from './agent-docs'
 import { agentVersion, type AgentVersionOptions } from './version'
 import { agentBanner, type AgentBannerOptions } from './banner'
+import { agentVisual, type AgentVisualOptions } from './visual'
 export { syncAgentInstructions, AGENT_DOC_MARKERS } from './agent-docs'
 import { agentSizeWatch, type AgentSizeWatchOptions } from './size-watch'
 import {
@@ -52,6 +53,10 @@ export { agentProjectGuide, inspectProject, aliasMatchesResolved }
 export type { AgentProjectGuideOptions, AgentProjectGuideReport, InspectProjectInternalOptions }
 export { inspectConfiguration } from './project-diagnostics'
 export type { ConfigurationInspectionOptions, ConfigurationInspection, DiagnosticIssue } from './project-diagnostics'
+export { agentVisual, type AgentVisualOptions } from './visual'
+export { inspectBrowserCapability, captureScreenshot } from './cdp'
+export { inspectCrawler } from './crawler'
+export type { CrawlerInspection, CrawlerInspectionOptions, CrawlerFile } from './crawler'
 export { inspectEngineering } from './engineering'
 export type {
   EngineeringInspection,
@@ -150,6 +155,8 @@ export interface AgentEyesOptions {
   version?: AgentVersionOptions | false
   /** dev 启动控制台横幅：环境、上报端点、代理、别名、版本、技术栈；传 false 可关闭。默认开启。 */
   banner?: AgentBannerOptions | false
+  /** 默认注入本地可视化面板入口：爬虫探测 / 浏览器能力 / 路由截图；false 关闭。 */
+  visual?: AgentVisualOptions | false
 }
 
 type ApiPayload = {
@@ -273,6 +280,14 @@ export function agentEyes(options: AgentEyesOptions = {}): Plugin[] {
     }))
   }
 
+  if (options.visual !== false) {
+    const telemetry = options.telemetry === false ? {} : options.telemetry ?? {}
+    plugins.push(agentVisual({
+      logDir: telemetry.logDir,
+      screenshots: telemetry.screenshots,
+      ...(options.visual ?? {}),
+    }))
+  }
   return plugins
 }
 
@@ -742,19 +757,30 @@ export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
           try {
             const stamp = ts()
             const p = parse(body)
+            let pageUrl: string | undefined
+            try {
+              const reported = JSON.parse(body) as { page_url?: string }
+              const url = new URL(reported.page_url ?? req.headers.referer ?? '')
+              if (url.host === req.headers.host && /^(https?:)$/.test(url.protocol)) pageUrl = `${url.origin}${url.pathname}`
+            } catch { /* 旧客户端未提供页面地址，不猜测其他项目的标签页。 */ }
+            const takeScreenshot = () => {
+              if (screenshots && pageUrl) void captureScreenshot(snaps, {
+                pageUrl, project: path.basename(server.config.root), reason: 'error',
+              }).catch(() => {})
+            }
             if (p?.kind === 'api') {
               const detail = apiDetail(p)
               aw.push(`[${stamp}] ${detail}`)
               if (!p.ok) {
                 ea.add(detail, stamp)
-                if (screenshots) captureScreenshot(snaps).catch(() => {})
+                takeScreenshot()
               }
             } else if (p?.kind === 'nav') {
               aw.push(`[${stamp}] [nav] ${p.from || '(direct)'} → ${p.to}`)
             } else if (p?.kind === 'error') {
               const cidTag = p.cid ? ` [${p.cid}]` : ''
               ea.add(`${cidTag} ${p.line}`, stamp)
-              if (screenshots) captureScreenshot(snaps).catch(() => {})
+              takeScreenshot()
             } else if (p?.kind === 'console_batch') {
               for (const e of p.entries) {
                 const tag = e.count > 1 ? ` (×${e.count})` : ''
@@ -784,7 +810,7 @@ export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
             } else if (body) {
               // 解析失败的 body：压成单行再记，避免多行破坏日志结构
               ea.add(body.replace(/[\r\n]+/g, ' ⏎ ').slice(0, 500), stamp)
-              if (screenshots) captureScreenshot(snaps).catch(() => {})
+              takeScreenshot()
             }
           } catch {
             /* 单条解析/写入失败不影响响应——避免 /dev/log 整体挂死 */

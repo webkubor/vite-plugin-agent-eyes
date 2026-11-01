@@ -36,7 +36,11 @@ function post(endpoint: string, payload: unknown) {
     void fetch(endpoint, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...(typeof payload === 'object' && payload !== null ? payload : {}),
+        page_url: typeof location !== 'undefined' && typeof location.origin === 'string' && /^https?:/.test(location.origin)
+          ? `${location.origin}${location.pathname}` : undefined,
+      }),
       keepalive: true,
     }).catch(() => {})
   } catch {
