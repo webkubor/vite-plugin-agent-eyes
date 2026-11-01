@@ -18,6 +18,7 @@
 | 配置与环境 | 核对当前 `mode` / `envDir` / `envPrefix`、客户端 `import.meta.env`、`process.env` 和 `define`；提示缺失键、前缀不匹配及配置文件中尚未加载的 `.env` 键 |
 | scripts 与硬编码 | 核对直接运行的 Vite scripts 的 `--mode` 和孤立 `.env.<mode>`；对 API 请求地址和代理目标中的固定 URL 发出启发式提醒 |
 | agent 指令文档 | 扫描 `AGENT.md`、`AGENTS.md`、`CLAUDE.md`、`GEMINI.md`，默认达到 200 行或 16 KiB 预警 |
+| 工程完备度 | 环境文件覆盖（development / test / production）、状态管理（Pinia / Vuex / Zustand / Redux）是否安装并初始化、axios / ky 是否有统一请求封装且 baseURL 读环境变量 |
 
 ## 单独使用
 
@@ -45,6 +46,7 @@ export default defineConfig({
 | `warn` | `true` | 是否在 dev 控制台输出建议摘要 |
 | `configuration` | `{}` | 配置体检选项：`sourceDir`、`mode`、`envDir`、`envPrefix`、`maxFiles`、`maxFileSize`；设为 `false` 关闭；启动时使用 Vite 最终配置优先于静态选项 |
 | `instructions` | `{ warnLines: 200, warnBytes: 16384 }` | 指令文档体积阈值；设为 `false` 关闭 |
+| `engineering` | `{}` | 工程完备度选项：`sourceDir`、`envDir`、`mode`；设为 `false` 关闭 |
 
 ## 报告示例
 
@@ -75,11 +77,25 @@ export default defineConfig({
     "documents": [{ "file": "AGENTS.md", "lines": 45, "bytes": 650, "oversized": false }],
     "warnings": []
   },
+  "engineering": {
+    "environments": {
+      "files": [".env.development", ".env.production"],
+      "modes": [
+        { "name": "development", "file": ".env.development", "configured": true },
+        { "name": "test", "file": ".env.test", "configured": false },
+        { "name": "production", "file": ".env.production", "configured": true }
+      ],
+      "missing": ["test"]
+    },
+    "state": { "package": "pinia", "installed": true, "configured": true, "evidence": "src/main.ts" },
+    "request": { "package": "axios", "installed": true, "unifiedFile": "src/api/request.ts", "envBase": true },
+    "suggestions": ["环境文件缺 .env.test；建议补齐本地测试与生产环境，避免上线才发现变量没配。"]
+  },
   "suggestions": ["src/api.ts:8 [ENV_MISSING] 当前模式未提供环境变量 VITE_API_URL，请检查 mode、envDir 与启动环境。"]
 }
 ```
 
-环境诊断以 Vite 当前解析快照为准；修改 `.env*` 后会提示重启 dev server，重启后按新配置生成报告。诊断结果是静态启发式建议，不执行项目脚本。超过扫描文件数或单文件大小时，`truncated: true` 与 `SCAN_INCOMPLETE` 明示未覆盖范围。环境文件仅按 Vite 的加载规则读取；报告不包含环境变量值和硬编码 URL。单独使用可调用 `inspectConfiguration(root, options)` / `inspectInstructions(root, options)`。
+环境诊断以 Vite 当前解析快照为准；修改 `.env*` 后会提示重启 dev server，重启后按新配置生成报告。诊断结果是静态启发式建议，不执行项目脚本。超过扫描文件数或单文件大小时，`truncated: true` 与 `SCAN_INCOMPLETE` 明示未覆盖范围。环境文件仅按 Vite 的加载规则读取；报告不包含环境变量值和硬编码 URL。单独使用可调用 `inspectConfiguration(root, options)` / `inspectInstructions(root, options)` / `inspectEngineering(root, options)`。
 
 ## 在 agentEyes 中关闭
 

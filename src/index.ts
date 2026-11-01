@@ -7,6 +7,8 @@ import { sanitizeAuthProfile, type AgentAuthProfileInput, type AgentAuthState } 
 import { formatInteractionLine, type InteractionEntry } from './interaction'
 import { agentGit, type AgentGitOptions, type AgentGitWebhook, type CommitInfo } from './git'
 import { syncAgentInstructions } from './agent-docs'
+import { agentVersion, type AgentVersionOptions } from './version'
+import { agentBanner, type AgentBannerOptions } from './banner'
 export { syncAgentInstructions, AGENT_DOC_MARKERS } from './agent-docs'
 import { agentSizeWatch, type AgentSizeWatchOptions } from './size-watch'
 import {
@@ -39,7 +41,9 @@ export type { AgentGitOptions, AgentGitWebhook, CommitInfo }
 export { findFakeGitShells, type FakeGitShell } from './git'
 
 // 构建期版本/tag 戳记（只读，不造 tag）
-export { agentVersion } from './version'
+export { agentVersion, type AgentVersionOptions } from './version'
+// dev 启动控制台横幅（环境 / 上报 / 代理 / 别名 / 版本 / 技术栈）
+export { agentBanner, collectBannerInfo, renderBanner, textWidth, type AgentBannerOptions, type BannerInfo } from './banner'
 
 // dev 期文件行数/体积实时看门狗（CSS 更严，只 warn 不阻断）
 export { agentSizeWatch }
@@ -48,6 +52,14 @@ export { agentProjectGuide, inspectProject, aliasMatchesResolved }
 export type { AgentProjectGuideOptions, AgentProjectGuideReport, InspectProjectInternalOptions }
 export { inspectConfiguration } from './project-diagnostics'
 export type { ConfigurationInspectionOptions, ConfigurationInspection, DiagnosticIssue } from './project-diagnostics'
+export { inspectEngineering } from './engineering'
+export type {
+  EngineeringInspection,
+  EngineeringInspectionOptions,
+  EnvironmentCoverage,
+  RequestInspection,
+  StateInspection,
+} from './engineering'
 export { inspectInstructions, isInstructionDocument } from './instruction-check'
 export type { InstructionCheckOptions, InstructionInspection, InstructionDocument } from './instruction-check'
 export {
@@ -91,7 +103,7 @@ export interface AgentDebuggerOptions {
   flushMs?: number
   /** 单个日志文件大小上限（字节），默认 512KB——超过截断旧记录 */
   maxBytes?: number
-  /** 错误时自动截图（通过 CDP），默认 false */
+  /** 错误时自动截图（通过 CDP），默认开启；CDP 不可用时静默跳过。传 false 关闭。 */
   screenshots?: boolean
 }
 
@@ -134,6 +146,10 @@ export interface AgentEyesOptions {
    * 不会新建文件，也不会碰标记块以外的内容；内容没变就不写（不制造 git diff）。
    */
   agentDocs?: boolean
+  /** 版本 / tag / commit 戳记（构建期 define + dev `/__version`）；传 false 可关闭。默认开启。 */
+  version?: AgentVersionOptions | false
+  /** dev 启动控制台横幅：环境、上报端点、代理、别名、版本、技术栈；传 false 可关闭。默认开启。 */
+  banner?: AgentBannerOptions | false
 }
 
 type ApiPayload = {
@@ -244,6 +260,17 @@ export function agentEyes(options: AgentEyesOptions = {}): Plugin[] {
   if (options.agentDocs !== false) {
     const telemetry = options.telemetry === false ? {} : options.telemetry ?? {}
     plugins.push(agentDocsPlugin(telemetry.logDir ?? 'log'))
+  }
+  if (options.version !== false) {
+    plugins.push(agentVersion(options.version ?? {}))
+  }
+  if (options.banner !== false) {
+    const telemetry = options.telemetry === false ? {} : options.telemetry ?? {}
+    plugins.push(agentBanner({
+      endpoint: telemetry.endpoint ?? '/dev/log',
+      logDir: telemetry.logDir ?? 'log',
+      ...(options.banner ?? {}),
+    }))
   }
 
   return plugins
@@ -559,9 +586,9 @@ api-calls.log 见 \`POST .../login code=0\` 紧跟 \`GET .../session 401\`
 修复：agentProxy 已在 dev 对 Set-Cookie 去 Domain / 剥 Secure / SameSite=None→Lax。
 
 ## 错误截图 + DOM 快照（snapshots/）
-开启 \`agentDebugger({ screenshots: true })\` 后，每次前端错误或 API 失败自动截取当前页面 PNG，存入 log/snapshots/err-{timestamp}.png。
-DOM 快照（log/snapshots/dom-{timestamp}.html）始终启用——错误时自动 dump document.body 结构，agent 可解析。
-需要 Chrome 带 \`--remote-debugging-port\` 启动（仅截图需要，DOM 快照不需要）。插件自动检测端口，未找到时静默跳过。
+错误截图默认开启：每次前端错误或 API 失败自动截取当前页面 PNG，存入 log/<port>/snapshots/err-{timestamp}.png；传 \`agentDebugger({ screenshots: false })\` 关闭。
+DOM 快照（log/<port>/snapshots/dom-{timestamp}.html）始终启用——错误时自动 dump document.body 结构，agent 可解析。
+截图需要 Chrome 带 \`--remote-debugging-port\` 启动（DOM 快照不需要）。插件自动检测端口，未找到时静默跳过，不影响其余日志。
 `
 
 // 多 agent 并行：同目录、不同端口的多个 dev server 各写 log/<port>/，互不刷掉。
@@ -618,16 +645,18 @@ const ROOT_MANIFEST = `# Agent 遥测日志（按 dev 端口隔离）
  * import { agentDebugger } from 'vite-plugin-agent-eyes'
  *
  * export default defineConfig({
- *   plugins: [agentDebugger({ screenshots: true })],
+ *   plugins: [agentDebugger()],
  * })
  * ```
+ *
+ * 截图默认开启；Chrome 未开 CDP 时静默跳过。要关闭传 `screenshots: false`。
  */
 export function agentDebugger(options: AgentDebuggerOptions = {}): Plugin {
   const baseDir = path.resolve(process.cwd(), options.logDir ?? 'log')
   const endpoint = options.endpoint ?? '/dev/log'
   const flushMs = options.flushMs ?? 200
   const maxBytes = options.maxBytes ?? 512 * 1024
-  const screenshots = options.screenshots ?? false
+  const screenshots = options.screenshots !== false
 
   // 端口确定后才初始化（log/<port>/）；HTTP 上报只会在 listening 之后到达，故 middleware 引用安全。
   let apiWriter: LogWriter | null = null

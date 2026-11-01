@@ -14,46 +14,46 @@
 
 | | DOM 快照（HTML） | 截图（PNG） |
 |------|------|------|
-| 默认是否开启 | **是**，`autoInstrument()` / `installAgentErrorReporter()` 自带 | **否**，需在 `agentDebugger({ screenshots: true })` 显式开 |
+| 默认是否开启 | **是**，`autoInstrument()` / `installAgentErrorReporter()` 自带 | **是**，`agentDebugger()` 默认开启（CDP 可用时） |
 | 需要 CDP / 特殊 Chrome | 不需要 | **需要** Chrome 带 `--remote-debugging-port` 启动 |
 | 给你什么 | 出错那一刻 `document.body.innerHTML` 的 HTML，可解析结构 | 出错那一刻页面的位图，所见即所得 |
 | 文件 | `dom-{timestamp}.html` | `err-{timestamp}.png` |
 
-一句话：**DOM 快照零成本、默认就有、给结构；截图要额外配 + CDP、给视觉。** 能用 DOM 快照定位的就用它，看不出来的再上截图。
+一句话：**两者默认都开。DOM 快照零成本、给结构；截图在 CDP 可用时给视觉。** 能用 DOM 快照定位的就用它，看不出来的再上截图。
 
 ## 最小可用示例
 
-### 1. DOM 快照（默认就开，无需任何额外配置）
+### 1. 两样都默认开启，无需任何额外配置
 
 ```ts
-// vite.config.ts —— 只挂 agentDebugger()，DOM 快照就已经随错误自动生成
+// vite.config.ts —— 只挂 agentDebugger()，DOM 快照与截图就已随错误自动触发
 import { agentDebugger } from 'vite-plugin-agent-eyes'
 
 export default defineConfig({
-  plugins: [agentDebugger()],  // ← 仅此一行，DOM 快照即随错误触发
+  plugins: [agentDebugger()],
 })
 ```
 
 ```ts
 // 应用入口文件（main.ts 等）
 import { autoInstrument } from 'vite-plugin-agent-eyes/client'
-autoInstrument()  // ← 自动捕获错误 + 抓 DOM 快照
+autoInstrument()  // ← 自动捕获错误 + 抓 DOM 快照 + 尝试截图
 ```
 
-### 2. 开启截图（需在 1 的基础上加 `screenshots: true` + CDP Chrome）
+### 2. 想关掉截图时再显式关闭
 
 ```ts
 // vite.config.ts
 export default defineConfig({
   plugins: [
-    agentDebugger({ screenshots: true }),  // ← 唯一新增：开启截图
+    agentDebugger({ screenshots: false }),  // ← 只在不需要截图时配置
   ],
 })
 ```
 
 ## 完整配置说明
 
-开启后，每次前端错误或 API 失败自动通过 CDP 截取当前页面，存入 `log/<port>/snapshots/err-{timestamp}.png`。同时自动 dump DOM 结构为 `log/<port>/snapshots/dom-{timestamp}.html`（无需 CDP）。
+默认开启后，每次前端错误或 API 失败自动通过 CDP 截取当前页面，存入 `log/<port>/snapshots/err-{timestamp}.png`。同时自动 dump DOM 结构为 `log/<port>/snapshots/dom-{timestamp}.html`（无需 CDP）。CDP 不可用时截图静默跳过，并在 60 秒内不再重复探测端口，不影响 dev server。
 
 **前置条件**：Chrome 需要带 remote debugging 启动（仅截图需要，DOM 快照不需要）：
 

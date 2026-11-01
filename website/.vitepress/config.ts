@@ -97,6 +97,8 @@ export default defineConfig({
             { text: 'agentGit()', link: '/api/agent-git' },
             { text: 'agentGuard()', link: '/api/agent-guard' },
             { text: 'agentSizeWatch()', link: '/api/agent-size-watch' },
+            { text: 'agentBanner()', link: '/api/agent-banner' },
+            { text: 'agentVersion()', link: '/api/agent-version' },
           ],
         },
         {

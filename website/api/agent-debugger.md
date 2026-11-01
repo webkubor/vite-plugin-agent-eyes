@@ -11,7 +11,8 @@ import { agentDebugger } from 'vite-plugin-agent-eyes'
 
 export default defineConfig({
   plugins: [agentDebugger()],
-  // agentDebugger({ screenshots: true })  // 可选：开启错误截图，需配合 CDP Chrome
+  // 错误截图默认开启；Chrome 未开 CDP 时静默跳过。
+  // 不需要截图时：agentDebugger({ screenshots: false })
 })
 ```
 
@@ -33,11 +34,11 @@ export default defineConfig({
 | `endpoint` | `'/dev/log'` | 接收前端上报的端点 |
 | `flushMs` | `200` | 落盘节流间隔（ms），高频上报只批写 |
 | `maxBytes` | `524288` | 单日志文件大小上限（字节），超过截断旧记录 |
-| `screenshots` | `false` | 错误时自动截图（通过 CDP） |
+| `screenshots` | `true` | 错误时自动截图（通过 CDP）；CDP 不可用时静默跳过。传 `false` 关闭 |
 
 ## 注意
 
-- **截图需配合 CDP Chrome**：`screenshots: true` 后，错误会通过 Chrome DevTools Protocol 截图存入 `log/<port>/snapshots/`。需要用 `--remote-debugging-port=9222` 启动 Chrome，插件会自动检测 9222–9232 端口；找不到则静默跳过，不影响其余日志。DOM 快照不需要 CDP，始终启用。详见 [../guide/snapshots](../guide/snapshots)。
+- **截图默认开启，需配合 CDP Chrome**：错误会通过 Chrome DevTools Protocol 截图存入 `log/<port>/snapshots/`。用 `--remote-debugging-port=9222` 启动 Chrome 即可，插件会自动检测 9222–9232 端口；找不到则静默跳过，并在 60 秒内不再重复探测，不影响其余日志。DOM 快照不需要 CDP，始终启用。详见 [../guide/snapshots](../guide/snapshots)。
 - **落盘有节流**：`flushMs` 默认 200ms，高频上报会批写，避免每个请求都打一次磁盘。
 
 ## 下一步

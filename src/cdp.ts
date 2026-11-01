@@ -1,10 +1,16 @@
 import http from 'node:http'
-import { execSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import WebSocket from 'ws'
+
+const execFileAsync = promisify(execFile)
 
 let lastAttempt = 0
 const COOLDOWN = 2000
+/** 找不到 CDP 时静默一段时间，避免每次报错都重新扫端口（默认开启截图后这是常态）。 */
+const MISS_COOLDOWN = 60_000
 let cachedPort: number | null = null
+let noPortUntil = 0
 
 function httpGet(url: string, timeout = 500): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -48,26 +54,32 @@ function cdpCommand(wsUrl: string, method: string, params?: Record<string, unkno
   })
 }
 
-/** 从 Chrome 进程命令行参数提取 --remote-debugging-port */
-function detectPortFromProcess(): number | null {
+/** 从 Chrome 进程命令行参数提取 --remote-debugging-port（异步，不阻塞 dev server）。 */
+async function detectPortFromProcess(): Promise<number | null> {
   try {
-    const out = execSync('ps x -o args= 2>/dev/null | grep -i "[C]hrome" | head -1', { encoding: 'utf8', timeout: 1000 })
-    const m = out.match(/--remote-debugging-port=(\d+)/)
+    const { stdout } = await execFileAsync('ps', ['x', '-o', 'args='], { encoding: 'utf8', timeout: 1000 })
+    const chromeLine = stdout.split('\n').find((line) => /chrome/i.test(line))
+    const m = chromeLine?.match(/--remote-debugging-port=(\d+)/)
     return m ? parseInt(m[1], 10) : null
   } catch {
     return null
   }
 }
 
-/** 扫描常用端口范围，找到第一个响应 CDP 的 */
+/** 并行探测常用端口，找到第一个响应 CDP 的。 */
 async function scanPorts(start = 9222, end = 9232): Promise<number | null> {
-  for (let port = start; port <= end; port++) {
-    try {
-      const body = await httpGet(`http://127.0.0.1:${port}/json/version`, 300)
-      if (JSON.parse(body)?.Browser) return port
-    } catch {}
-  }
-  return null
+  const ports = Array.from({ length: end - start + 1 }, (_, index) => start + index)
+  const results = await Promise.all(
+    ports.map(async (port) => {
+      try {
+        const body = await httpGet(`http://127.0.0.1:${port}/json/version`, 300)
+        return JSON.parse(body)?.Browser ? port : null
+      } catch {
+        return null
+      }
+    }),
+  )
+  return results.find((port) => port !== null) ?? null
 }
 
 /** 找到 Chrome CDP 端口，优先级：缓存 → 进程参数 → 端口扫描 */
@@ -81,7 +93,10 @@ async function findPort(): Promise<number | null> {
     }
   }
 
-  const fromProcess = detectPortFromProcess()
+  // 刚确认过没有可用 CDP：静默一段时间，别让每条报错都触发进程查询和端口扫描。
+  if (Date.now() < noPortUntil) return null
+
+  const fromProcess = await detectPortFromProcess()
   if (fromProcess) {
     try {
       await httpGet(`http://127.0.0.1:${fromProcess}/json/version`, 300)
@@ -91,8 +106,13 @@ async function findPort(): Promise<number | null> {
   }
 
   const fromScan = await scanPorts()
-  if (fromScan) cachedPort = fromScan
-  return fromScan
+  if (fromScan) {
+    cachedPort = fromScan
+    noPortUntil = 0
+    return fromScan
+  }
+  noPortUntil = Date.now() + MISS_COOLDOWN
+  return null
 }
 
 export async function captureScreenshot(dir: string): Promise<string | null> {

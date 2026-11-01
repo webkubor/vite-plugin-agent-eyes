@@ -77,7 +77,7 @@ import { agentEyes, agentProxy } from 'vite-plugin-agent-eyes'
 
 export default defineConfig({
   plugins: [
-    ...agentEyes(), // 运行时日志 + 自动客户端埋点 + 项目体检 + size watch + 提交 guard
+    ...agentEyes(), // 日志 + 埋点 + 截图 + 项目体检 + 启动横幅 + 版本戳记 + size watch + guard
   ],
   server: {
     proxy: {
@@ -99,7 +99,10 @@ export default defineConfig({
 |---|---|---|
 | **运行时日志** | API / 错误 / 控制台 / 交互轨迹落成结构化日志，agent 直接读 | [日志总览](https://webkubor.github.io/vite-plugin-agent-eyes/guide/logs) |
 | **代理层日志** | `Cookie` / `Set-Cookie` / status —— fetch 看不到的那层 | [agentProxy](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-proxy) |
-| **错误截图 + DOM 快照** | 出错自动截图（CDP 自动探测端口）+ dump DOM | [快照](https://webkubor.github.io/vite-plugin-agent-eyes/guide/snapshots) |
+| **错误截图 + DOM 快照** | 默认开启；出错自动截图（CDP 自动探测端口）+ dump DOM | [快照](https://webkubor.github.io/vite-plugin-agent-eyes/guide/snapshots) |
+| **启动横幅** | 控制台一眼看到环境、`.env` 覆盖、上报端点、代理、别名、版本、技术栈、工程完备度 | [agentBanner](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-banner) |
+| **工程体检** | 环境文件（dev/test/prod）、Pinia 是否初始化、axios/ky 是否统一封装 | [agentProjectGuide](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-project-guide) |
+| **版本戳记** | 注入 `__APP_VERSION__` / tag / commit，dev 暴露 `/__version` | [agentVersion](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-version) |
 | **登录态画像** | 脱敏账户画像，agent 一眼知道当前浏览器是谁 | [登录态](https://webkubor.github.io/vite-plugin-agent-eyes/guide/auth-profile) |
 | **提交前 guard** | secrets / 大文件 / 超长文件 / `any` / `console.log` / `cssVars` | [Guard](https://webkubor.github.io/vite-plugin-agent-eyes/guide/guard) |
 | **Git workflow** | 零配置装 pre-commit / post-commit，支持多平台 webhook | [Git workflow](https://webkubor.github.io/vite-plugin-agent-eyes/guide/git-workflow) |

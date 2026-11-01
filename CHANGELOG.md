@@ -8,6 +8,14 @@
 - `agentProjectGuide` 默认体检最终 Vite 配置、环境变量静态引用和直接 Vite scripts 的模式适配；报告缺失变量、前缀不匹配、客户端 `process.env`、配置尚未加载的环境键、孤立模式文件与疑似硬编码请求地址，报告不含变量值或 URL。
 - 项目内 `AGENT.md` / `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` 默认达到 200 行或 16 KiB 时预警，可用 `projectGuide.instructions` 调整或关闭；相关文件保存后更新体检报告。
 - 导出 `inspectConfiguration`、`inspectInstructions` 和相关类型，供独立脚本复用；扫描有文件大小与数量边界，未覆盖范围显式提示。
+- `agentBanner`：dev 启动控制台横幅，显示环境与 `.env` 覆盖、上报端点、代理清单（账号密码脱敏）、路径别名、版本戳记、技术栈与工程完备度；`agentEyes` 默认包含。
+- `inspectEngineering`：只读体检环境文件（development / test / production）、状态管理（Pinia / Vuex / Zustand / Redux）与统一请求层（axios / ky + baseURL 是否读环境变量），结果进入 `project-guide.json` 与启动横幅。
+- 导出 `agentBanner`、`collectBannerInfo`、`renderBanner`、`textWidth`、`inspectEngineering` 及相关类型。
+
+### Changed
+- **默认即用**：`agentEyes()` 默认包含 `agentVersion()` 与 `agentBanner()`；错误截图 `screenshots` 改为默认开启（CDP 不可用时静默跳过），都可显式传 `false` 关闭。
+- `agentVersion` 支持 `root` 跟随 Vite root、`override` 控制是否覆盖项目已有同名 define；默认不覆盖。
+- CDP 探测改为异步进程查询与并行端口扫描，失败后 60 秒内不重复探测，避免默认开启截图后阻塞 dev server。
 
 ## [0.15.1] - 2026-09-15
 

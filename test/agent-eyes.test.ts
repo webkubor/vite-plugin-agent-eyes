@@ -21,6 +21,8 @@ describe('agentEyes', () => {
     expect(names).toContain('vite-plugin-agent-eyes-size-watch')
     expect(names).toContain('vite-plugin-agent-eyes-project-guide')
     expect(names).toContain('vite-plugin-agent-eyes-git')
+    expect(names).toContain('vite-plugin-agent-eyes-version')
+    expect(names).toContain('vite-plugin-agent-eyes-banner')
   })
 
   it('can disable every default capability explicitly', () => {
@@ -32,6 +34,8 @@ describe('agentEyes', () => {
         projectGuide: false,
         git: false,
         agentDocs: false,
+        version: false,
+        banner: false,
       }),
     ).toEqual([])
   })

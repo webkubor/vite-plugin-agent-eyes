@@ -9,6 +9,7 @@ import path from 'node:path'
 import type { Plugin, ResolvedConfig } from 'vite'
 import { inspectInstructions, type InstructionCheckOptions, type InstructionInspection } from './instruction-check'
 import { inspectConfiguration, type ConfigurationInspectionOptions } from './project-diagnostics'
+import { inspectEngineering, type EngineeringInspection, type EngineeringInspectionOptions } from './engineering'
 
 const CONFIG_FILES = ['vite.config.ts', 'vite.config.js', 'vite.config.mts', 'vite.config.mjs']
 const TS_CONFIG_FILES = ['tsconfig.json', 'jsconfig.json']
@@ -34,6 +35,8 @@ export interface AgentProjectGuideOptions {
   configuration?: ConfigurationInspectionOptions | false
   /** agent 指令文档体积检查；默认 200 行 / 16 KiB，false 关闭。 */
   instructions?: InstructionCheckOptions | false
+  /** 工程完备度（环境文件 / 状态管理 / 统一请求层）；false 关闭。 */
+  engineering?: EngineeringInspectionOptions | false
 }
 
 /** 项目结构体检报告。 */
@@ -54,6 +57,7 @@ export interface AgentProjectGuideReport {
   suggestions: string[]
   configuration?: ReturnType<typeof inspectConfiguration>
   instructions?: InstructionInspection
+  engineering?: EngineeringInspection
 }
 
 function exists(root: string, rel: string): boolean {
@@ -246,14 +250,24 @@ export function inspectProject(root: string, options: InspectProjectInternalOpti
     ...(options.resolvedConfig ? { resolvedConfig: options.resolvedConfig } : {}),
   })
   const instructions = options.instructions === false ? undefined : inspectInstructions(root, options.instructions)
+  const engineering = options.engineering === false ? undefined : inspectEngineering(root, {
+    sourceDir: sourceDir ?? undefined,
+    mode: options.resolvedConfig?.mode,
+    envDir: typeof options.resolvedConfig?.envDir === 'string'
+      ? path.relative(root, options.resolvedConfig.envDir) || '.'
+      : undefined,
+    ...options.engineering,
+  })
   return {
     ...base,
     configuration,
     instructions,
+    engineering,
     suggestions: [
       ...suggestionList(base, alias),
       ...(configuration?.issues.map((issue) => `${issue.file}${issue.line ? `:${issue.line}` : ''} [${issue.code}] ${issue.message}`) ?? []),
       ...(instructions?.warnings ?? []),
+      ...(engineering?.suggestions ?? []),
     ],
   }
 }
