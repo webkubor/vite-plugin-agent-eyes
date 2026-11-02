@@ -2,6 +2,14 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
+## [Unreleased]
+
+### Changed
+- 中英文 README 改为演示优先：用 webkubor 博客真实页面制作 9 秒循环 GIF，优先展示用途、收益和最小接入，技术细节链接到文档与 Agent Guide。
+
+### Fixed
+- Sitemap 在 XML 声明后带多段前置注释时不再被误判为无效；补充回归测试并用博客实际 54 条 sitemap 验证。
+
 ## [0.16.0] - 2026-11-02
 
 ### Added

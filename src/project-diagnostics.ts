@@ -17,7 +17,7 @@ export interface ConfigurationInspectionOptions {
   mode?: string
   envDir?: string
   envPrefix?: string | string[]
-  resolvedConfig?: Partial<Pick<ResolvedConfig, 'mode' | 'envDir' | 'envPrefix' | 'env' | 'define' | 'configFile'>>
+  resolvedConfig?: Partial<Pick<ResolvedConfig, 'mode' | 'envPrefix' | 'env' | 'define' | 'configFile'>> & { envDir?: string | false }
   /** 最大源码/配置文件数，默认 500。 */
   maxFiles?: number
   /** 单个源码/配置文件最大字节数，默认 256 KiB。 */

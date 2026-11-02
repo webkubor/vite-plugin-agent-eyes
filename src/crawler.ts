@@ -145,7 +145,7 @@ function inspectRobots(scan: Scan): CrawlerInspection['robots'] {
 
 function inspectSitemap(scan: Scan): CrawlerInspection['sitemap'] {
   // 有意仅识别根节点：未使用 XML 解析器，不判断嵌套、实体、命名空间或语法合法性。
-  const text = (scan.text ?? '').replace(/^\uFEFF/, '').replace(/^\s*(?:<\?[\s\S]*?\?>|<!--[\s\S]*?-->)\s*/g, '').trimStart()
+  const text = (scan.text ?? '').replace(/^\uFEFF/, '').replace(/^(?:\s|<\?[\s\S]*?\?>|<!--[\s\S]*?-->)+/, '').trimStart()
   const valid = /^<(?:urlset|sitemapindex)(?=[\s/>])/.test(text)
   return { ...fileResult(scan), valid, urlCount: valid ? (text.match(/<loc\s*>/g) ?? []).length : null }
 }

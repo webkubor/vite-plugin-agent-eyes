@@ -43,6 +43,13 @@ describe('inspectCrawler', () => {
     expect(result.suggestions).toEqual([])
   })
 
+  it('recognizes sitemap after declaration and multiple leading comments', () => {
+    const root = fixture({
+      'public/sitemap.xml': '<?xml version="1.0"?>\n<!-- first -->\n<!-- second -->\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://example.com/</loc></url></urlset>',
+    })
+    expect(inspectCrawler(root).sitemap).toMatchObject({ status: 'present', valid: true, urlCount: 1 })
+  })
+
   it('flags noindex, disallow all and robots without sitemap reference', () => {
     const root = fixture({
       'public/robots.txt': 'User-agent: *\nDisallow: /\n',
