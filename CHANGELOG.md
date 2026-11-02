@@ -2,7 +2,7 @@
 
 本项目所有重要变更记录于此。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/zh-CN/)。
 
-## [Unreleased]
+## [0.16.0] - 2026-11-02
 
 ### Added
 - 默认网页 Agent Eyes 入口与本地可视化面板：爬虫配置、当前项目/路由、浏览器内核提示、实测 CDP 截图能力及手动截图。`visual: false` 可关闭。
@@ -265,7 +265,8 @@
 - 三类结构化日志：`api-calls.log` / `errors.log` / `proxy.log`
 - 招牌功能：本地 http 上游 `Set-Cookie` 改写（去 `Domain` / 剥 `Secure` / `SameSite=None → Lax`），解决「登录成功却一直 401」
 
-[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.13.0...HEAD
+[0.16.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.15.1...v0.16.0
+[Unreleased]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.16.0...HEAD
 [0.13.0]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.4...v0.13.0
 [0.10.4]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/webkubor/vite-plugin-agent-eyes/compare/v0.10.2...v0.10.3
