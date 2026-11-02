@@ -6,6 +6,11 @@ on:
     paths:
       - 'website/**'
       - '.github/workflows/deploy.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -13,9 +18,9 @@ permissions:
   pages: write
   id-token: write
 
-# 同一时刻只跑一个部署，新 push 取消正在进行的旧部署
+# PR 各自验构建，不取消主干部署；新主干部署取代旧部署。
 concurrency:
-  group: pages
+  group: pages-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'deploy' }}
   cancel-in-progress: true
 
 jobs:
@@ -39,12 +44,15 @@ jobs:
         run: npm run docs:build
 
       - uses: actions/configure-pages@v4
+        if: github.event_name != 'pull_request'
 
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
         with:
           path: website/.vitepress/dist
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:

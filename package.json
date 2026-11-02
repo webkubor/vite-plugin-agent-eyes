@@ -54,11 +54,6 @@
   "peerDependencies": {
     "vite": ">=4 <10"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
-  },
   "devDependencies": {
     "@types/node": "^24.10.11",
     "@types/ws": "^8.18.1",
