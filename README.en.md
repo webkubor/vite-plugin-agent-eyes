@@ -1,86 +1,70 @@
-<h1 align="center">👀 vite-plugin-agent-eyes</h1>
+<div align="center">
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/vite-plugin-agent-eyes/mark-v3-dark.svg"><img src="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/vite-plugin-agent-eyes/mark-v3.svg" alt="Agent Eyes logo" width="72" height="72" /></picture>
+
+# 👀 vite-plugin-agent-eyes
+
+**Give your AI agent eyes on the running website.** Errors, requests, routes, and screenshots become readable evidence. Humans get a visual panel right on the page.
+
+<a href="https://www.npmjs.com/package/vite-plugin-agent-eyes"><img src="https://img.shields.io/npm/v/vite-plugin-agent-eyes?style=for-the-badge&color=3fb950&logo=npm&label=npm" alt="npm version" /></a>
+<a href="https://www.npmjs.com/package/vite-plugin-agent-eyes"><img src="https://img.shields.io/npm/dm/vite-plugin-agent-eyes?style=for-the-badge&color=6d7f9c&label=downloads" alt="monthly npm downloads" /></a>
+<a href="https://github.com/webkubor/vite-plugin-agent-eyes/releases"><img src="https://img.shields.io/github/v/release/webkubor/vite-plugin-agent-eyes?style=for-the-badge&color=181717&label=release" alt="release" /></a>
+
+[中文](./README.md) · [Documentation](https://webkubor.github.io/vite-plugin-agent-eyes/) · [Changelog](./CHANGELOG.md)
+
+</div>
+
+## See it in 30 seconds
 
 <p align="center">
-  <strong>A self-healing telemetry layer for AI agents — plus a pre-commit risk gate for humans.</strong><br>
-  Runtime logs let an agent read, diagnose, fix, and verify without reading your code; a redacted auth profile tells it whose browser it is driving; a pre-commit guard shows obvious errors, secrets, and code smells before you ever commit.
+  <img src="assets/demo/agent-eyes-blog-walkthrough.gif" alt="Live demo on the webkubor blog: projects page, Agent Eyes entry, crawler checks, CDP browser detection, route-scoped screenshot" width="900" />
 </p>
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/vite-plugin-agent-eyes"><img src="https://img.shields.io/npm/v/vite-plugin-agent-eyes?style=for-the-badge&color=3fb950&logo=npm&label=npm" alt="npm" /></a>
-  <a href="https://www.npmjs.com/package/vite-plugin-agent-eyes"><img src="https://img.shields.io/npm/dm/vite-plugin-agent-eyes?style=for-the-badge&color=6d7f9c&label=downloads" alt="downloads" /></a>
-  <a href="https://github.com/webkubor/vite-plugin-agent-eyes/releases"><img src="https://img.shields.io/github/v/release/webkubor/vite-plugin-agent-eyes?style=for-the-badge&color=181717&label=release" alt="release" /></a>
-  <img src="https://img.shields.io/badge/runtime_deps-1-5A9E6F?style=for-the-badge" alt="deps" />
-  <img src="https://img.shields.io/badge/license-MIT-777?style=for-the-badge" alt="MIT" />
-</p>
+> Recorded on my real [webkubor blog](https://webkubor.online/) running locally with Vite: `/projects`, a 54-URL sitemap, CDP detection, and a screenshot labeled with its project and route. [Stills and recording details](./assets/demo/README.md).
 
-<p align="center">
-  <a href="https://vitejs.dev"><img src="https://img.shields.io/badge/Vite-%E2%9A%A1%EF%B8%8F-646cff?style=for-the-badge&logo=vite&logoColor=white" alt="vite" /></a>
-  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-ready-3178c6?style=for-the-badge&logo=typescript&logoColor=white" alt="typescript" /></a>
-</p>
+| Before | With Agent Eyes |
+|---|---|
+| Send an agent a screenshot and explain which page it came from | Match the project and route, then label the screenshot with project, route, and time |
+| Guess the environment and API target from config files | Read the startup banner: mode, proxies, aliases, and stack |
+| Check robots, sitemap, and llms.txt by hand | Inspect them from the page; source files alone do not prove search indexing |
+| Reproduce a bug and sift through scattered console and network output | Let the agent read structured errors, API calls, interactions, and proxy logs |
 
-<p align="center">
-  <a href="README.md">中文</a> · <a href="CHANGELOG.md">Changelog</a>
-</p>
+<div align="center">
 
----
+**One setup, on by default.** Chrome screenshots need a CDP-enabled browser; other capabilities work out of the box. Turn off individual features if you don't need them.
 
-## 🎯 Why This
+</div>
 
-| Scenario | Screenshot it to the agent | Hand-rolled Vite config | vite-plugin-agent-eyes |
-|---|:---:|:---:|:---:|
-| Agent can see runtime errors | ❌ Relies on a human relaying | ❌ Console only | ✅ Structured API / error / proxy-header logs |
-| Frontend errors become self-diagnosable | ❌ | ❌ | ✅ Structured telemetry + screen reading |
-| Lost login state auto-repaired | ❌ | ❌ | ✅ Local cookie self-healing |
-| Code smells caught before commit | ❌ | ❌ | ✅ Pre-commit guard |
-| Setup cost | — | Medium | Low: one plugin + one import |
-
-## Why
-
-Most code will be written by AI, but the second round of debugging and bug verification is often done by nobody reading the code. What the agent lacks is **runtime visibility**:
-
-- `fetch` cannot see `Set-Cookie` / `Cookie` / redirects / CORS — a **blind spot at the network layer**.
-- Console errors vanish instantly and are mixed with extension noise — **no traceable, classifiable error stream**.
-- The fields an API actually returns often disagree with the type definitions — so you can only **guess**.
-
-This plugin turns all of that into **structured, parseable runtime logs** — cleared on every start, newest first — plus a redacted auth profile and an interaction trace, so an agent can reconstruct the UI, drive the browser, and reproduce a path.
-
-## Install
+## Start in a minute
 
 ```bash
 pnpm add -D vite-plugin-agent-eyes
 ```
 
-`peerDependencies` supports `vite >=4 <10`; CI verifies the 4 / 5 / 6 / 7 / 8 major matrix (Vite 9 is not in the matrix yet). The only runtime dependency is `ws` (CDP screenshots only); Node `>=20.19`.
-
 ```ts
+// vite.config.ts
 import { defineConfig } from 'vite'
-import { agentEyes, agentProxy } from 'vite-plugin-agent-eyes'
+import { agentEyes } from 'vite-plugin-agent-eyes'
 
 export default defineConfig({
   plugins: [...agentEyes()],
-  server: { proxy: { '/api': agentProxy('https://your-api.example.com') } },
 })
 ```
 
-Logs, panel, and screenshots are dev-only; version stamping also applies to builds. On start you get a console banner and an **Agent Eyes** entry in the bottom-right of the page (crawler config, CDP status, route-scoped screenshots). Opt out with `{ visual: false, banner: false }` or `telemetry: { screenshots: false }`.
+Run `vite dev`. A project summary appears in your terminal; the **Agent Eyes** entry appears at the bottom-right of the page. Already have a Vite proxy and need cookie or proxy diagnostics? Wrap its target with [`agentProxy()`](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-proxy). A proxy is optional for the basic setup.
 
-## Capabilities
+Works with React, Vue, Svelte, Solid, and plain JS. CI verifies Vite 4–8; the peer range is `vite >=4 <10` (Vite 9 has not entered the matrix).
 
-| Capability | One line | Docs |
-|---|---|---|
-| **Runtime logs** | API / errors / console / interaction traces as structured logs the agent reads directly | [Logs](https://webkubor.github.io/vite-plugin-agent-eyes/guide/logs) |
-| **Proxy-layer logs** | `Cookie` / `Set-Cookie` / status — the layer `fetch` cannot see | [agentProxy](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-proxy) |
-| **Error screenshot + DOM snapshot** | Enabled by default; screenshots carry the route, plus a DOM dump | [Snapshots](https://webkubor.github.io/vite-plugin-agent-eyes/guide/snapshots) |
-| **Visual panel** | Page badge opens crawler checks (robots / sitemap / llms.txt), CDP capability, and route-scoped capture | [Visual panel](https://webkubor.github.io/vite-plugin-agent-eyes/guide/visual) |
-| **Startup banner** | Mode, `.env` coverage, endpoint, proxies, aliases, version, stack, engineering readiness | [agentBanner](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-banner) |
-| **Engineering checks** | Env files (dev/test/prod), Pinia setup, unified axios/ky layer | [agentProjectGuide](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-project-guide) |
-| **Version stamp** | `__APP_VERSION__` / tag / commit defines + dev `/__version` | [agentVersion](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-version) |
-| **Auth profile** | Redacted account profile; the agent instantly knows whose browser it is | [Auth profile](https://webkubor.github.io/vite-plugin-agent-eyes/guide/auth-profile) |
-| **Pre-commit guard** | secrets / large files / overlong files / `any` / `console.log` / `cssVars` | [Guard](https://webkubor.github.io/vite-plugin-agent-eyes/guide/guard) |
-| **Git workflow** | Zero-config pre-commit / post-commit hooks, multi-platform webhooks | [Git workflow](https://webkubor.github.io/vite-plugin-agent-eyes/guide/git-workflow) |
-| **Size Watch** | Real-time warnings for oversized files during dev — the cure for AI-generated bloat | [Size Watch](https://webkubor.github.io/vite-plugin-agent-eyes/guide/size-watch) |
-| **Agent bootstrap** | On dev start, writes how to read the logs into your existing `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` | [Agent Bootstrap](https://github.com/webkubor/vite-plugin-agent-eyes/blob/main/AGENT_BOOTSTRAP.md) |
+## A real 401, without guesswork
 
-## License
+A login request succeeds, then the next call returns 401. Browser `fetch` cannot show the complete proxy `Set-Cookie` / `Cookie` exchange. `agentProxy()` records the actual request and response cookie attributes and repairs common Domain / Secure / SameSite problems in local HTTP development. [See the case study](https://webkubor.github.io/vite-plugin-agent-eyes/guide/case-401).
 
-MIT
+## Explore further
+
+[Visual panel and screenshots](https://webkubor.github.io/vite-plugin-agent-eyes/guide/visual) · [Reading the logs](https://webkubor.github.io/vite-plugin-agent-eyes/guide/logs) · [Environment and engineering checks](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-project-guide) · [Pre-commit guard](https://webkubor.github.io/vite-plugin-agent-eyes/guide/guard) · [Full API](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-eyes)
+
+Screenshots require one uniquely matching CDP page for the current project and route. Finding robots or a sitemap locally does not prove they are publicly reachable or indexed. Logs, panel, and screenshots are dev-only; the version stamp also applies to builds. [Installation notes and switches](https://webkubor.github.io/vite-plugin-agent-eyes/guide/install).
+
+Leave the detailed debugging to [AGENT_GUIDE.md](./AGENT_GUIDE.md) and the generated `log/README.md`. To teach an agent to discover the tool on its own, use [AGENT_BOOTSTRAP.md](./AGENT_BOOTSTRAP.md).
+
+MIT · [Issues](https://github.com/webkubor/vite-plugin-agent-eyes/issues)

@@ -37,6 +37,7 @@
   "files": [
     "dist",
     "README.md",
+    "assets/demo",
     "AGENT_GUIDE.md",
     "AGENT_BOOTSTRAP.md",
     "CHANGELOG.md",
