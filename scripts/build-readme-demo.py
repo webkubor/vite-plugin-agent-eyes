@@ -7,7 +7,7 @@ import argparse
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-FONT = "/System/Library/Fonts/STHeiti Medium.ttc"
+FONT: str | None = None
 FRAMES = [
     ("01 · 真实网站", "在 webkubor 博客打开作品路由", "projects"),
     ("02 · 页面入口", "右下角 Agent Eyes，点开就有视野", "projects-badge"),
@@ -17,8 +17,17 @@ FRAMES = [
 ]
 
 
-def font(size: int) -> ImageFont.FreeTypeFont:
-    return ImageFont.truetype(FONT, size)
+def font(size: int):
+    candidates = [FONT] if FONT else [
+        "/System/Library/Fonts/STHeiti Medium.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+        "C:/Windows/Fonts/msyh.ttc",
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return ImageFont.truetype(candidate, size)
+    raise SystemExit("No CJK font found. Pass --font /path/to/a/CJK-font.ttf (for example Noto Sans CJK).")
 
 
 def fit(source: Path, canvas: tuple[int, int], crop: tuple[int, int, int, int] | None) -> Image.Image:
@@ -44,9 +53,12 @@ def card(source: Path, title: str, subtitle: str, crop=None) -> Image.Image:
 
 def main():
     ap = argparse.ArgumentParser()
+    global FONT
+    ap.add_argument("--font", help="Path to a CJK TTF/TTC font (auto-detected on macOS, Linux and Windows)")
     ap.add_argument("--source", type=Path, required=True)
     ap.add_argument("--output", type=Path, required=True)
     args = ap.parse_args()
+    FONT = args.font
     source = args.source
     mapping = {
         "projects": (source / "agent-eyes-demo-projects-stable.png", None),

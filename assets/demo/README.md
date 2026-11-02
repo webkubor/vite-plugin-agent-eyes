@@ -14,4 +14,4 @@
 python3 scripts/build-readme-demo.py --source /tmp --output assets/demo/agent-eyes-blog-walkthrough.gif
 ```
 
-脚本需要 Pillow。输出为 5 帧循环 GIF；首屏加载约 0.14 MiB。更换网站演示时请替换真实源图和标题，避免图文不符。
+脚本需要 Pillow 与中文字体。自动寻找 macOS / Linux / Windows 常见中文字体；也可传 `--font /path/to/NotoSansCJK-Regular.ttc` 指定字体。输出为 5 帧循环 GIF；首屏加载约 0.14 MiB。更换网站演示时请替换真实源图和标题，避免图文不符。
