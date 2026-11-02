@@ -127,7 +127,7 @@ Tailwind 的 arbitrary value（`z-[var(--z-overlay)]`、`rounded-[var(--radius-m
 两条防误报设计：只检查**新增行**，所以存量项目接入不会被历史债淹没；声明全集为空时
 （非 git 环境、采集失败、项目本来没有自定义属性）整项跳过，不会把每个 `var()` 都判成未声明。
 仓库内声明通过 `git ls-files` 采集，天然跳过 `node_modules` 与 `.gitignore` 内容，
-也包含 `style={{ '--x': v }}` 这类动态声明。
+也包含 <code v-pre>style={{ '--x': v }}</code> 这类动态声明。
 
 > `cssVars` 拦的是「变量**不存在**」。变量存在之后还有两层能坏——值不合格（对比度不够）
 > 和用得失控（一屏 9 种字号、灰阶只拉开 2 层），由
