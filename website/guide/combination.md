@@ -6,9 +6,9 @@
 
 | 入口 | 类型 | 默认打开什么 |
 |---|---|---|
-| `agentEyes()` | 服务端 | 运行时日志 + 客户端自动埋点 + 项目结构体检 + dev 超长文件提醒 + 提交 guard |
+| `agentEyes()` | 服务端 | 运行时日志 + 自动埋点 + 错误截图 + 项目/工程/爬虫体检 + 启动横幅 + 可视化面板 + 版本戳记 + dev 超长文件提醒 + 提交 guard |
 
-`agentEyes()` 只在 `vite dev` 生效，并会自动向 HTML 注入 `autoInstrument()`，同时写出 `log/project-guide.json` 供 agent 规划 API/业务/路由/配置层级。没有特殊需求时，这就是唯一需要记住的入口。
+`agentEyes()` 的日志、面板、截图与 hook 只在 `vite dev` 生效，并会自动向 HTML 注入 `autoInstrument()`，同时写出 `log/project-guide.json` 供 agent 规划项目结构与环境配置；版本戳记的 `define` 会参与构建。没有特殊需求时，这就是唯一需要记住的入口。
 
 ```ts
 import { defineConfig } from 'vite'

@@ -47,11 +47,20 @@ features:
     title: 错误截图 + DOM 快照
     details: 前端错误或 API 失败自动截图（CDP）+ dump DOM 结构，视觉与结构双重现场。
     link: /guide/snapshots
+  - icon: 🔍
+    title: 爬虫配置探测
+    details: 本地面板检查 robots.txt、sitemap、llms.txt 与 noindex，区分 public/源码候选，不把「文件存在」当成「已收录」。
+    link: /guide/visual
+    linkText: 打开可视化面板 →
+  - icon: 🖼️
+    title: 路由级截图
+    details: 按 origin + pathname 匹配标签页，截图带项目/路由/时间标记，并写 JSON 元数据与索引供 agent 定位。
+    link: /guide/visual
   - icon: ⚡
     title: 框架无关
     details: 纯 Vite 插件 + 浏览器原生 API。React、Vue、Svelte、Solid、原生 JS 都能用。
   - icon: 🤖
     title: Agent 原生
-    details: 一站式 agentEyes() 默认打开运行时日志、自动埋点、项目体检、Size Watch 和提交 Guard；需要时再拆底层 API。
+    details: 一站式 agentEyes() 默认打开运行时日志、自动埋点、截图、项目/工程/爬虫体检、启动横幅、可视化面板、版本戳记和提交 Guard；需要时再拆底层 API。
     link: /api/agent-eyes
 ---

@@ -18,11 +18,11 @@ npm i -D vite-plugin-agent-eyes
 
 ## 它是个 Vite 插件
 
-只在 dev 期生效（`apply: 'serve'`），不影响 build 产物，不影响线上体积。React、Vue、Svelte、Solid、原生 JS 都能用——只要你的项目用 Vite，详见[框架无关性](./framework-agnostic)。
+日志、面板、截图与 guard hook 只在 dev 期生效（`apply: 'serve'`），不影响 build 产物，不影响线上体积。版本戳记（`agentVersion`）例外：它注入的 `define` 会参与构建，可用 `version: false` 关闭。React、Vue、Svelte、Solid、原生 JS 都能用——只要你的项目用 Vite，详见[框架无关性](./framework-agnostic)。
 
 ## Vite 版本兼容
 
-当前 `peerDependencies` 是 `vite >=4 <9`。仓库 CI 会按主版本矩阵验证：
+当前 `peerDependencies` 是 `vite >=4 <10`。仓库 CI 按主版本矩阵验证：
 
 | Vite 主版本 | 验证版本 |
 |---|---|
@@ -32,7 +32,7 @@ npm i -D vite-plugin-agent-eyes
 | 7 | `7.3.6` |
 | 8 | `8.2.0` |
 
-兼容验证跑 `typecheck`、单测和构建。未来 Vite 9 出来后先加入矩阵验证，再放开 peer 范围。
+兼容验证跑 `typecheck`、单测和构建。Vite 9 目前允许安装但尚未进矩阵；等加入矩阵验证通过后再对外承诺。
 
 ## 进阶：类型提示与配置诊断
 

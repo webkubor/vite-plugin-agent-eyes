@@ -9,7 +9,7 @@
   <a href="https://www.npmjs.com/package/vite-plugin-agent-eyes"><img src="https://img.shields.io/npm/v/vite-plugin-agent-eyes?style=for-the-badge&color=3fb950&logo=npm&label=npm" alt="npm" /></a>
   <a href="https://www.npmjs.com/package/vite-plugin-agent-eyes"><img src="https://img.shields.io/npm/dm/vite-plugin-agent-eyes?style=for-the-badge&color=6d7f9c&label=downloads" alt="downloads" /></a>
   <a href="https://github.com/webkubor/vite-plugin-agent-eyes/releases"><img src="https://img.shields.io/github/v/release/webkubor/vite-plugin-agent-eyes?style=for-the-badge&color=181717&label=release" alt="release" /></a>
-  <img src="https://img.shields.io/badge/runtime_deps-0-5A9E6F?style=for-the-badge" alt="deps" />
+  <img src="https://img.shields.io/badge/runtime_deps-1-5A9E6F?style=for-the-badge" alt="deps" />
   <img src="https://img.shields.io/badge/license-MIT-777?style=for-the-badge" alt="MIT" />
 </p>
 
@@ -50,7 +50,19 @@ This plugin turns all of that into **structured, parseable runtime logs** — cl
 pnpm add -D vite-plugin-agent-eyes
 ```
 
-`peerDependencies` supports `vite >=4 <9`; CI verifies across the 4 / 5 / 6 / 7 / 8 major matrix.
+`peerDependencies` supports `vite >=4 <10`; CI verifies the 4 / 5 / 6 / 7 / 8 major matrix (Vite 9 is not in the matrix yet). The only runtime dependency is `ws` (CDP screenshots only); Node `>=20.19`.
+
+```ts
+import { defineConfig } from 'vite'
+import { agentEyes, agentProxy } from 'vite-plugin-agent-eyes'
+
+export default defineConfig({
+  plugins: [...agentEyes()],
+  server: { proxy: { '/api': agentProxy('https://your-api.example.com') } },
+})
+```
+
+Logs, panel, and screenshots are dev-only; version stamping also applies to builds. On start you get a console banner and an **Agent Eyes** entry in the bottom-right of the page (crawler config, CDP status, route-scoped screenshots). Opt out with `{ visual: false, banner: false }` or `telemetry: { screenshots: false }`.
 
 ## Capabilities
 
@@ -58,7 +70,11 @@ pnpm add -D vite-plugin-agent-eyes
 |---|---|---|
 | **Runtime logs** | API / errors / console / interaction traces as structured logs the agent reads directly | [Logs](https://webkubor.github.io/vite-plugin-agent-eyes/guide/logs) |
 | **Proxy-layer logs** | `Cookie` / `Set-Cookie` / status — the layer `fetch` cannot see | [agentProxy](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-proxy) |
-| **Error screenshot + DOM snapshot** | Automatic screenshot on error (CDP auto-detects the port) + DOM dump | [Snapshots](https://webkubor.github.io/vite-plugin-agent-eyes/guide/snapshots) |
+| **Error screenshot + DOM snapshot** | Enabled by default; screenshots carry the route, plus a DOM dump | [Snapshots](https://webkubor.github.io/vite-plugin-agent-eyes/guide/snapshots) |
+| **Visual panel** | Page badge opens crawler checks (robots / sitemap / llms.txt), CDP capability, and route-scoped capture | [Visual panel](https://webkubor.github.io/vite-plugin-agent-eyes/guide/visual) |
+| **Startup banner** | Mode, `.env` coverage, endpoint, proxies, aliases, version, stack, engineering readiness | [agentBanner](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-banner) |
+| **Engineering checks** | Env files (dev/test/prod), Pinia setup, unified axios/ky layer | [agentProjectGuide](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-project-guide) |
+| **Version stamp** | `__APP_VERSION__` / tag / commit defines + dev `/__version` | [agentVersion](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-version) |
 | **Auth profile** | Redacted account profile; the agent instantly knows whose browser it is | [Auth profile](https://webkubor.github.io/vite-plugin-agent-eyes/guide/auth-profile) |
 | **Pre-commit guard** | secrets / large files / overlong files / `any` / `console.log` / `cssVars` | [Guard](https://webkubor.github.io/vite-plugin-agent-eyes/guide/guard) |
 | **Git workflow** | Zero-config pre-commit / post-commit hooks, multi-platform webhooks | [Git workflow](https://webkubor.github.io/vite-plugin-agent-eyes/guide/git-workflow) |

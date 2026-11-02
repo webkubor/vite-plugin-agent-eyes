@@ -18,7 +18,7 @@
   <a href="https://www.npmjs.com/package/vite-plugin-agent-eyes"><img src="https://img.shields.io/npm/v/vite-plugin-agent-eyes?style=for-the-badge&color=3fb950&logo=npm&label=npm" alt="npm" /></a>
   <a href="https://www.npmjs.com/package/vite-plugin-agent-eyes"><img src="https://img.shields.io/npm/dm/vite-plugin-agent-eyes?style=for-the-badge&color=6d7f9c&label=downloads" alt="downloads" /></a>
   <a href="https://github.com/webkubor/vite-plugin-agent-eyes/releases"><img src="https://img.shields.io/github/v/release/webkubor/vite-plugin-agent-eyes?style=for-the-badge&color=181717&label=release" alt="release" /></a>
-  <img src="https://img.shields.io/badge/runtime_deps-0-5A9E6F?style=for-the-badge" alt="deps" />
+  <img src="https://img.shields.io/badge/runtime_deps-1-5A9E6F?style=for-the-badge" alt="deps" />
   <img src="https://img.shields.io/badge/license-MIT-777?style=for-the-badge" alt="MIT" />
 </p>
 
@@ -67,7 +67,7 @@
 pnpm add -D vite-plugin-agent-eyes
 ```
 
-`peerDependencies` 支持 `vite >=4 <9`，CI 按 4 / 5 / 6 / 7 / 8 主版本矩阵验证。
+`peerDependencies` 支持 `vite >=4 <10`；CI 按 4 / 5 / 6 / 7 / 8 主版本矩阵验证（Vite 9 尚未进矩阵）。唯一运行时依赖是 `ws`（仅 CDP 截图用），Node `>=20.19`。
 
 ## 快速上手
 
@@ -87,8 +87,11 @@ export default defineConfig({
 })
 ```
 
-`agentEyes()` 只在 `vite dev` 生效，会自动向 dev HTML 注入埋点，**普通项目不用改 `main.tsx`**。
-逐项关闭传 `{ client: false, sizeWatch: false, git: false }`。
+日志、面板、截图等能力只在 `vite dev` 生效，会自动向 dev HTML 注入埋点，**普通项目不用改 `main.tsx`**；版本戳记（`agentVersion`）同时作用于构建。
+
+启动后：控制台出现启动横幅（环境 / `.env` 覆盖 / 上报端点 / 代理 / 别名 / 版本 / 技术栈 / 工程完备度），网页右下角出现 **Agent Eyes** 入口（爬虫配置、浏览器 CDP 状态、当前路由截图）。
+
+逐项关闭：`{ visual: false, banner: false, client: false, sizeWatch: false, git: false }`；截图用 `telemetry: { screenshots: false }`。
 
 需要精细控制时，客户端也可手动调用 `autoInstrument()` 或更底层的
 `logApiCall` / `recordLoginSuccess` 等——见 [客户端 API](https://webkubor.github.io/vite-plugin-agent-eyes/api/client-functions)。
@@ -144,10 +147,10 @@ log/<port>/proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req)
 | **console.log** | 全级别控制台输出 | React dev warning、库 deprecation |
 | **interaction.log** | click/input/change/submit/route 脱敏交互轨迹 | 还原复现路径 |
 | **proxy-\<host\>.log** | 代理层 `Cookie` / `Set-Cookie` 属性 / status | 网络、鉴权层 |
-| **snapshots/** | 错误截图（PNG）+ DOM 快照（HTML） | 视觉 + 结构双重现场 |
+| **snapshots/** | 错误截图（PNG，文件名带路由）+ DOM 快照（HTML）+ `index.json`（最近 100 条项目/路由/浏览器元数据） | 视觉 + 结构双重现场 |
 | **auth-state.json** | 最近一次登录成功的脱敏账户画像 | 确认当前账号 |
 | `log/guard-report.json` | 提交前 guard 的最近一次报告 | 看 commit 为何被拦 |
-| `log/project-guide.json` | 项目结构体检与 alias 建议 | 开局判断项目层级 |
+| `log/project-guide.json` | 项目结构、环境变量/scripts 诊断、爬虫配置、工程完备度与 alias 建议 | 开局判断项目健康度 |
 
 `log/README.md` 是给 agent 的自描述入口（启动时自动生成）；`errors.log` 顶部是按频率降序的 `Top Errors`，省去 agent 自己数频率。
 
@@ -184,6 +187,8 @@ log/<port>/proxy-api.example.com.log: GET .../auth/session → 200 | Cookie(req)
 - **🟡 dev server 退出时未 flush**：节流窗口内最后一批 buffer 可能不落盘，下版挂 server `close` hook。
 - **🟡 日志关联靠 cid 字符串匹配**：cid 需 agent 自己 grep，下版可加索引文件 `log/correlations.json`。
 - **🟡 DOM 快照只抓 body.innerHTML**：不含 computed styles / pseudo elements。当前可用 [`contrast-guard measure <url>`](https://github.com/webkubor/contrast-guard) 顶上——它遍历所有可见元素的 computed style 出统计。
+- **🟡 爬虫探测是本地静态识别**：只说明源码/public 里有没有 robots、sitemap、llms.txt，**不代表线上可访问、搜索引擎已收录或 AI 已推荐**；sitemap 只识别根节点，不做完整 XML 校验。
+- **🟡 截图只认唯一匹配页面**：按 origin + pathname 匹配标签页，多开同地址标签会跳过；hash 路由仅按 pathname 标记，不区分 `#/sub`。
 
 > 欢迎在 [Issues](https://github.com/webkubor/vite-plugin-agent-eyes/issues) 反馈，或直接 PR。
 

@@ -16,7 +16,7 @@ export default defineConfig({
 })
 ```
 
-`agentEyes()` 只在 `vite dev` 生效。它会自动向 dev HTML 注入：
+`agentEyes()` 的日志、面板、截图与 hook 只在 `vite dev` 生效；版本戳记（`agentVersion`）注入的 define 会参与构建。它会自动向 dev HTML 注入：
 
 ```ts
 import { autoInstrument } from 'vite-plugin-agent-eyes/client'
