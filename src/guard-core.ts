@@ -12,10 +12,13 @@ import {
   CSS_VAR_FILE_PATTERN,
   CSS_VAR_USE_PATTERN,
   DEFAULT_CSS_VAR_IGNORE_PREFIXES,
+  DEFAULT_ENV_PARITY_ALLOW_DIFF_KEYWORDS,
+  DEFAULT_ENV_PARITY_FILES,
   DEFAULT_FILE_LENGTH_BLOCK,
   DEFAULT_FILE_LENGTH_WARN,
   DEFAULT_LARGE_FILE_BLOCK_BYTES,
   DEFAULT_REPORT_FILE,
+  ENV_FILE_PATTERN,
   GENERATED_FILE_PATTERN,
   JS_VAR_DECL_PATTERN,
   SECRET_PATTERNS,
@@ -25,6 +28,7 @@ import {
   type AgentGuardLevel,
   type GuardCheckSwitch,
   type GuardCssVarsOptions,
+  type GuardEnvParityOptions,
   type GuardFileLengthOptions,
   type GuardLargeFilesOptions,
   type GuardReportItem,
@@ -66,6 +70,11 @@ function cssVarsOptions(checks: AgentGuardOptions['checks']): GuardCssVarsOption
   return typeof checks.cssVars === 'object' ? checks.cssVars : {}
 }
 
+function envParityOptions(checks: AgentGuardOptions['checks']): GuardEnvParityOptions {
+  if (!checks || Array.isArray(checks)) return {}
+  return typeof checks.envParity === 'object' ? checks.envParity : {}
+}
+
 function switchValue<Key extends keyof AgentGuardChecks>(checks: AgentGuardOptions['checks'], key: Key): GuardCheckSwitch | undefined {
   if (!checks || Array.isArray(checks)) return undefined
   const value = checks[key]
@@ -97,6 +106,7 @@ export function normalizeGuardConfig(options: AgentGuardOptions = {}): Normalize
   const largeFiles = largeFilesOptions(checks)
   const fileLength = fileLengthOptions(checks)
   const cssVars = cssVarsOptions(checks)
+  const envParity = envParityOptions(checks)
 
   return {
     level,
@@ -126,6 +136,17 @@ export function normalizeGuardConfig(options: AgentGuardOptions = {}): Normalize
         severity: severityFor(level, switchValue(checks, 'cssVars'), 'block'),
         declareFrom: cssVars.declareFrom ?? [],
         ignorePrefixes: cssVars.ignorePrefixes ?? DEFAULT_CSS_VAR_IGNORE_PREFIXES,
+      },
+      envParity: {
+        enabled: enabledFor(checks, 'envParity'),
+        // 默认 block：环境变量开业务功能 = 测试环境验证的行为与生产不一致，
+        // 「测试没问题、上线有问题」的 bug 直接漏到生产（2026-11 ModelGo 国际站
+        // PUBLIC_MARKET 仅 test 配置、跨站兜底路径生产独有即为实例）。
+        // 触发条件是本次提交动了 .env*，存量项目接入不会被历史分叉淹没。
+        severity: severityFor(level, switchValue(checks, 'envParity'), 'block'),
+        files: envParity.files ?? DEFAULT_ENV_PARITY_FILES,
+        allowDiffKeywords: envParity.allowDiffKeywords ?? DEFAULT_ENV_PARITY_ALLOW_DIFF_KEYWORDS,
+        ignoreVars: envParity.ignoreVars ?? [],
       },
     },
   }
@@ -310,6 +331,127 @@ export function runCssVarChecks(
   return items
 }
 
+/** env 文件里的单个变量定义。 */
+interface EnvEntry {
+  name: string
+  value: string
+  line: number
+}
+
+/**
+ * 解析 .env 文本为变量表。支持 `KEY=VALUE` 与 `export KEY=VALUE`，
+ * 跳过空行和 `#` 注释行；值去掉成对引号后原样保留（不去行内注释——
+ * 两环境同变量若都带注释不会影响一致性判断）。
+ */
+export function parseEnvEntries(text: string): EnvEntry[] {
+  const entries: EnvEntry[] = []
+  const lines = text.split(/\r?\n/)
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = lines[index].trim()
+    if (!raw || raw.startsWith('#')) continue
+    const declaration = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(raw)
+    if (!declaration) continue
+    let value = declaration[2].trim()
+    const quoted = /^(['"])(.*)\1$/.exec(value)
+    if (quoted) value = quoted[2]
+    entries.push({ name: declaration[1], value, line: index + 1 })
+  }
+  return entries
+}
+
+function truncateValue(value: string): string {
+  const shown = value.length > 60 ? `${value.slice(0, 60)}…` : value
+  return shown || '(空)'
+}
+
+/** 值形似绝对地址（http(s) 或协议相对）。 */
+const URL_LIKE_PATTERN = /^(?:https?:)?\/\//i
+
+/** 值形似主机名/主机名:端口——至少一段点分，避免把单词值（如 `global`）误判成寻址。 */
+const HOST_LIKE_PATTERN = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?$/i
+
+/**
+ * 判定一个变量是否允许两环境取值不同：变量名命中 allowDiffKeywords，
+ * 或值本身就是地址形状（URL / 主机名）——寻址类命名千差万别
+ * （*_CONSOLE、*_DOCS、*_GATEWAY…），靠名字清单永远列不全，值形状才是共性。
+ */
+function allowsValueDiff(name: string, value: string, keywords: string[]): boolean {
+  const lowerName = name.toLowerCase()
+  if (keywords.some((keyword) => lowerName.includes(keyword))) return true
+  return URL_LIKE_PATTERN.test(value) || HOST_LIKE_PATTERN.test(value)
+}
+
+/**
+ * 读取 env 比对文件的内容：staged 里有就用提交时的快照，否则回退工作区文件。
+ * 一致性是文件对的全量性质，只看 diff 会漏掉「本次没动、但两侧早已分叉」的变量。
+ */
+function envFileContent(cwd: string, relative: string, staged: StagedFile[]): string | undefined {
+  const snapshot = staged.find((file) => file.path === relative)
+  if (snapshot && !snapshot.binary) return snapshot.content
+  return readFileSafe(path.resolve(cwd, relative))
+}
+
+/**
+ * 检查环境文件对之间的变量集合与取值分叉。
+ *
+ * 规则：变量集合必须一致（一侧独有 = 分叉）；同名变量取值不同时，只有
+ * 变量名命中 allowDiffKeywords（环境寻址类命名）才放行，其余按 bug 拦截。
+ * 任一文件缺失或为空时静默跳过——单环境项目（无 .env.test）不属于本检查的管辖。
+ */
+export function runEnvParityChecks(
+  cwd: string,
+  config: NormalizedGuardConfig,
+  staged: StagedFile[],
+): GuardReportItem[] {
+  const check = config.checks.envParity
+  const [primary, secondary] = check.files
+  const primaryText = envFileContent(cwd, primary, staged)
+  const secondaryText = envFileContent(cwd, secondary, staged)
+  if (!primaryText?.trim() || !secondaryText?.trim()) return []
+
+  const primaryEntries = parseEnvEntries(primaryText)
+  const secondaryMap = new Map(parseEnvEntries(secondaryText).map((entry) => [entry.name, entry]))
+  const primaryNames = new Set(primaryEntries.map((entry) => entry.name))
+  const items: GuardReportItem[] = []
+
+  for (const entry of primaryEntries) {
+    if (check.ignoreVars.includes(entry.name)) continue
+    const other = secondaryMap.get(entry.name)
+    if (!other) {
+      items.push({
+        check: 'envParity',
+        severity: check.severity,
+        file: primary,
+        line: entry.line,
+        message: `变量 ${entry.name} 仅在 ${primary} 定义，${secondary} 缺失——环境间行为分叉，测试环境永远验不到该路径`,
+      })
+      continue
+    }
+    if (entry.value === other.value) continue
+    if (allowsValueDiff(entry.name, entry.value, check.allowDiffKeywords)) continue
+    items.push({
+      check: 'envParity',
+      severity: check.severity,
+      file: primary,
+      line: entry.line,
+      message: `变量 ${entry.name} 两环境取值不同（${primary}='${truncateValue(entry.value)}' vs ${secondary}='${truncateValue(other.value)}'）——非寻址类变量必须一致，用 env 开业务功能属于红线`,
+    })
+  }
+
+  for (const entry of secondaryMap.values()) {
+    if (check.ignoreVars.includes(entry.name) || primaryNames.has(entry.name)) continue
+    items.push({
+      check: 'envParity',
+      severity: check.severity,
+      file: secondary,
+      line: entry.line,
+      message: `变量 ${entry.name} 仅在 ${secondary} 定义，${primary} 缺失——环境间行为分叉，生产会走进测试才有的分支（或反之）`,
+    })
+  }
+
+  return items
+}
+
 function summarizeItems(items: GuardReportItem[]): GuardResult['summary'] {
   return {
     block: items.filter((item) => item.severity === 'block').length,
@@ -365,6 +507,11 @@ export function runGuard(options: AgentGuardOptions = {}, cwd = process.cwd()): 
       if (declared.size > 0) {
         items.push(...staged.flatMap((file) => runCssVarChecks(file, config, declared)))
       }
+    }
+
+    // 触发条件：本次提交动了 .env*（任一 mode 变体），才比对目标文件对的全量状态。
+    if (config.checks.envParity.enabled && staged.some((file) => ENV_FILE_PATTERN.test(file.path))) {
+      items.push(...runEnvParityChecks(cwd, config, staged))
     }
 
     return finalizeGuardResult(cwd, config.reportFile, resultFromItems(config.level, items))

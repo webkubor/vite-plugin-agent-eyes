@@ -67,6 +67,8 @@ export default defineConfig({
         noConsoleLog: 'warn',
         // 设计 token 由 npm 包提供时必须点明来源，否则它声明的变量会被判成未声明
         cssVars: { declareFrom: ['node_modules/@acme/design-tokens/tokens.css'] },
+        // 提交动了 .env* 时比对环境文件对：变量集合与业务取值分叉按 bug 拦截
+        envParity: { files: ['.env.production', '.env.test'], ignoreVars: [] },
       },
     }),
   ],
@@ -79,7 +81,7 @@ export default defineConfig({
 agentGit({
   guard: {
     level: 'block',
-    checks: ['secrets', 'largeFiles', 'fileLength', 'todo', 'noAny', 'noConsoleLog', 'cssVars'],
+    checks: ['secrets', 'largeFiles', 'fileLength', 'todo', 'noAny', 'noConsoleLog', 'cssVars', 'envParity'],
   },
   precommit: ['pnpm typecheck', 'pnpm lint'],
   webhook: { url: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxxx', format: 'feishu' },
@@ -105,8 +107,26 @@ agentGit({
 | `noAny` | warn | TypeScript 新增显式 `any` |
 | `noConsoleLog` | warn | 前端源码新增 `console.log` |
 | `cssVars` | **block** | 新增行里 `var(--x)` 引用了从未声明的自定义属性（0.14.0+） |
+| `envParity` | **block** | 提交动了 `.env*` 时，环境文件对之间变量集合缺失或业务取值分叉（Unreleased） |
 
 每次提交会在控制台打印报告，并写入 `log/guard-report.json`。这个文件给 agent 后续排查用；运行时日志仍在 `log/<port>/`。
+
+## envParity：环境变量分叉为什么按 bug 拦截
+
+用环境变量开业务功能，等于让**测试环境验证的行为和生产不一致**：测试环境验不到的分支上了生产，就是「测试没问题、上线有问题」的直接来源——而且构建、lint、单测全都不会报错，只有真实流量进了那个分支才暴露。
+
+两条规则：
+
+1. **变量集合必须一致**。`.env.test` 有、`.env.production` 没有（或反之）= 分叉：生产会走进测试才有的逻辑，或反过来。想保留真正只属于单一环境的运行时标记，用 `ignoreVars` 显式声明。
+2. **同名变量取值不同时，只有寻址类放行**。变量名命中 `allowDiffKeywords`（url / host / domain / endpoint / origin / port / site / base），**或值本身就是地址形状**（`http(s)://` 开头、点分主机名）——域名端点本来就该按环境配。其余（联系邮箱、功能开关值、文案键）两环境必须同值。
+
+触发条件是**本次提交动了 `.env*` 文件**（任一 mode 变体），比对的是文件对的**全量状态**——一致性是集合性质，只看 diff 会漏掉早已分叉的变量；不动的提交不会被历史分叉淹没。
+
+| 配置 | 默认 | 说明 |
+|------|------|------|
+| `files` | `['.env.production', '.env.test']` | 要比对的环境文件对（相对仓库根）；单环境项目（无 .env.test）自动跳过 |
+| `allowDiffKeywords` | `['url','host','domain','endpoint','origin','port','site','base']` | 变量名（小写化后）包含关键字时允许两环境取值不同 |
+| `ignoreVars` | `[]` | 完全跳过的变量名，用于显式保留的单一环境标记 |
 
 ## cssVars：为什么它和 secrets 一样是 block
 

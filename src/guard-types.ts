@@ -31,12 +31,28 @@ export interface GuardLargeFilesOptions {
 export interface GuardCssVarsOptions {
   /**
    * 额外的声明来源：相对仓库根的文件路径，用于把仓库外的声明并入全集。
-   * 设计 token 常由 npm 包提供、不被 git 跟踪，必须在这里点明，否则会被判成未声明。
+   * 设计 token 常由 npm 包提供、不被 git 跟踪，必须在这里点名，否则会被判成未声明。
    * 例：`['node_modules/@acme/design-tokens/tokens.css']`
    */
   declareFrom?: string[]
   /** 忽略的变量名前缀（框架运行时注入的，不是设计 token）。默认见 DEFAULT_CSS_VAR_IGNORE_PREFIXES。 */
   ignorePrefixes?: string[]
+}
+
+/** 环境变量一致性检查配置。 */
+export interface GuardEnvParityOptions {
+  /**
+   * 要比对的环境文件对，相对仓库根；默认 ['.env.production', '.env.test']。
+   * 只有一侧被 staged 时也会跑全量比对（一致性是文件对的全量性质，不是 diff 性质）。
+   */
+  files?: [string, string]
+  /**
+   * 变量名（小写化后）包含这些关键字时允许两环境取值不同——环境寻址类
+   * （域名/端点/端口）本来就该按环境配置。默认见 DEFAULT_ENV_PARITY_ALLOW_DIFF_KEYWORDS。
+   */
+  allowDiffKeywords?: string[]
+  /** 完全跳过的变量名（如确实只有单一环境才有的运行时标记）。 */
+  ignoreVars?: string[]
 }
 
 /** 内置检查项配置。 */
@@ -55,6 +71,8 @@ export interface AgentGuardChecks {
   noConsoleLog?: GuardCheckSwitch
   /** 检测新增行里 var(--x) 引用了从未声明的自定义属性（含 Tailwind arbitrary value）。 */
   cssVars?: GuardCheckSwitch | GuardCssVarsOptions
+  /** 检测环境文件对之间的变量集合与取值分叉（env 开业务功能 = 测试与生产行为不一致）。 */
+  envParity?: GuardCheckSwitch | GuardEnvParityOptions
 }
 
 /** agentGuard 用户配置。 */
@@ -99,6 +117,16 @@ export interface NormalizedCssVarsCheck extends NormalizedGuardCheck {
   ignorePrefixes: string[]
 }
 
+/** 标准化后的环境变量一致性检查配置。 */
+export interface NormalizedEnvParityCheck extends NormalizedGuardCheck {
+  /** 要比对的环境文件对（相对仓库根）。 */
+  files: [string, string]
+  /** 允许两环境取值不同的变量名关键字（小写化后子串匹配）。 */
+  allowDiffKeywords: string[]
+  /** 完全跳过的变量名。 */
+  ignoreVars: string[]
+}
+
 /** 标准化后的 guard 配置。 */
 export interface NormalizedGuardConfig {
   /** guard 等级。 */
@@ -116,6 +144,7 @@ export interface NormalizedGuardConfig {
     noAny: NormalizedGuardCheck
     noConsoleLog: NormalizedGuardCheck
     cssVars: NormalizedCssVarsCheck
+    envParity: NormalizedEnvParityCheck
   }
 }
 
@@ -199,6 +228,28 @@ export const CSS_VAR_DECL_PATTERN = /(--[a-zA-Z0-9_-]+)\s*:/g
 
 /** CSS 自定义属性引用：`var(--x`（同时覆盖 Tailwind 的 `z-[var(--x)]` 写法）。 */
 export const CSS_VAR_USE_PATTERN = /var\(\s*(--[a-zA-Z0-9_-]+)/g
+
+/** 触发 envParity 检查的 staged 文件：.env 及其 mode 变体（.env.production / .env.test.local 等）。 */
+export const ENV_FILE_PATTERN = /^\.env(?:\.[^/]+)?$/
+
+/** envParity 默认比对的文件对。 */
+export const DEFAULT_ENV_PARITY_FILES: [string, string] = ['.env.production', '.env.test']
+
+/**
+ * envParity 默认允许两环境取值不同的变量名关键字（小写化后子串匹配）。
+ * 这些是环境寻址类命名——域名/端点/端口本来就该按环境配置；
+ * 不在名单里的同名不同值视为业务开关分叉，按 bug 拦截。
+ */
+export const DEFAULT_ENV_PARITY_ALLOW_DIFF_KEYWORDS = [
+  'url',
+  'host',
+  'domain',
+  'endpoint',
+  'origin',
+  'port',
+  'site',
+  'base',
+]
 
 /**
  * JS/TS 里以字符串键声明自定义属性：`style={{ '--x': v }}`。

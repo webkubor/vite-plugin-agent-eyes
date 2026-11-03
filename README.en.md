@@ -28,6 +28,7 @@
 | Guess the environment and API target from config files | Read the startup banner: mode, proxies, aliases, and stack |
 | Check robots, sitemap, and llms.txt by hand | Inspect them from the page; source files alone do not prove search indexing |
 | Reproduce a bug and sift through scattered console and network output | Let the agent read structured errors, API calls, interactions, and proxy logs |
+| Discover an env-flagged feature only after it ships | Commit guard blocks env-file drift: non-addressing vars must match across environments |
 
 <div align="center">
 
