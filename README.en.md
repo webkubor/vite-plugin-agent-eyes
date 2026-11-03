@@ -68,4 +68,14 @@ Screenshots require one uniquely matching CDP page for the current project and r
 
 Leave the detailed debugging to [AGENT_GUIDE.md](./AGENT_GUIDE.md) and the generated `log/README.md`. To teach an agent to discover the tool on its own, use [AGENT_BOOTSTRAP.md](./AGENT_BOOTSTRAP.md).
 
+## Star History
+
+<a href="https://www.star-history.com/#webkubor/vite-plugin-agent-eyes&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=webkubor/vite-plugin-agent-eyes&amp;type=Date&amp;theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=webkubor/vite-plugin-agent-eyes&amp;type=Date" />
+    <img alt="Star History Chart for webkubor/vite-plugin-agent-eyes" src="https://api.star-history.com/svg?repos=webkubor/vite-plugin-agent-eyes&amp;type=Date" width="100%" />
+  </picture>
+</a>
+
 MIT · [Issues](https://github.com/webkubor/vite-plugin-agent-eyes/issues)

@@ -68,4 +68,14 @@ React、Vue、Svelte、Solid 与原生 JS 均可用。CI 验证 Vite 4–8；安
 
 复杂排障留给 [AGENT_GUIDE.md](./AGENT_GUIDE.md) 和自动生成的 `log/README.md`；如果需要让 agent 主动发现插件，读 [AGENT_BOOTSTRAP.md](./AGENT_BOOTSTRAP.md)。
 
+## Star History
+
+<a href="https://www.star-history.com/#webkubor/vite-plugin-agent-eyes&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=webkubor/vite-plugin-agent-eyes&amp;type=Date&amp;theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=webkubor/vite-plugin-agent-eyes&amp;type=Date" />
+    <img alt="Star History Chart for webkubor/vite-plugin-agent-eyes" src="https://api.star-history.com/svg?repos=webkubor/vite-plugin-agent-eyes&amp;type=Date" width="100%" />
+  </picture>
+</a>
+
 MIT · [Issues](https://github.com/webkubor/vite-plugin-agent-eyes/issues)
