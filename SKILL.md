@@ -65,7 +65,7 @@ recordLoginSuccess({ userId, email, name, roles, tenantId })
 |------|------|------|
 | `agentEyes` | dev 启动 | 默认组合入口：日志 + 自动客户端埋点 + 项目体检 + size watch + guard-only git hook |
 | `agentGit` | 提交前/后 | 替代 husky：跑 `precommit` 命令 + 可内嵌 `guard`；提交后飞书通知。自带 rebase/cherry 重放去重 |
-| `agentGuard` | 提交时 | 硬拦 staged：secret/超大文件/超长行数/TODO/any/console.log。**已用 agentGit 就配进 `agentGit({ guard })`，别再单独挂**（争用 pre-commit） |
+| `agentGuard` | 提交时 | 硬拦 staged：secret/超大文件/超长行数/TODO/any/console.log/未声明 cssVars/env 分叉（envParity：动了 `.env*` 就比对 `.env.production` vs `.env.test` 的变量集合与业务取值，防「测试没问题、上线有问题」）。**已用 agentGit 就配进 `agentGit({ guard })`，别再单独挂**（争用 pre-commit） |
 | `agentSizeWatch` | dev 写码当下 | 超长文件在控制台 `[agent-eyes:size]` warn，只警告不阻断。专治 AI 堆超长 CSS |
 
 **典型配置（本项目三仓在用的形态）：**
@@ -82,7 +82,7 @@ agentGit({
 ```
 
 **level**：`warn` 只报告 / `block`（推荐）红线阻断 / `strict` 暂等同 block。
-**guard.checks**：`['secrets','largeFiles','fileLength','todo','noAny','noConsoleLog']`，可按需开关。
+**guard.checks**：`['secrets','largeFiles','fileLength','todo','noAny','noConsoleLog','cssVars','envParity']`，可按需开关；`cssVars`/`envParity` 默认 block（静默失效与 env 分叉都验不出来，按红线处理）。
 
 **两条 0.12.0 行为，配 guard 前必须知道（否则会以为是 bug）：**
 - **lockfile/压缩产物不计 `fileLength`**：`pnpm-lock.yaml`/`package-lock.json`/`yarn.lock`/`*.lock`/`go.sum`/`.min.js|css` 自动跳过——生成物非手写代码。要再扩名单改 `GENERATED_FILE_PATTERN`（guard-core + guard-hook 两份拷贝同步）。

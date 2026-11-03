@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Added
+- agentGuard 新检查项 `envParity`（默认 block）：提交动了 `.env*` 时全量比对环境文件对（默认 `.env.production` vs `.env.test`）——变量集合缺失即分叉；同名取值不同时，变量名命中 `allowDiffKeywords` 或值形似 URL/主机名（寻址类）才放行，其余按 bug 拦截。防「用 env 开业务功能导致测试环境验不到生产行为」；单环境项目自动跳过。
+
 ### Changed
 - 中英文 README 改为演示优先：用 webkubor 博客真实页面制作 9 秒循环 GIF，优先展示用途、收益和最小接入，技术细节链接到文档与 Agent Guide。
 
