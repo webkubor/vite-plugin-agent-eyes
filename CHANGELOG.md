@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-03
+
 ### Added
 - agentGuard 新检查项 `envParity`（默认 block）：提交动了 `.env*` 时全量比对环境文件对（默认 `.env.production` vs `.env.test`）——变量集合缺失即分叉；同名取值不同时，变量名命中 `allowDiffKeywords` 或值形似 URL/主机名（寻址类）才放行，其余按 bug 拦截。防「用 env 开业务功能导致测试环境验不到生产行为」；单环境项目自动跳过。
 
