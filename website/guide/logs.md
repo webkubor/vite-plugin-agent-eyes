@@ -48,7 +48,9 @@ head log/5173/errors.log
 
 `log/README.md` 是给 agent 的自描述入口（启动时自动生成），agent 不知道该读哪个文件时，让它先读这个。
 
-想让 AI 编程助手在排查时主动查看这些日志？插件不会自动修改助手的指令文件。可以参考 [Agent Bootstrap 指南](https://github.com/webkubor/vite-plugin-agent-eyes/blob/main/AGENT_BOOTSTRAP.md)，把适用于你所用助手的规则加入项目指令文件；安装 npm 包后，也可以在 `node_modules/vite-plugin-agent-eyes/AGENT_BOOTSTRAP.md` 查看。规则仍取决于助手实际是否读取对应文件。
+想让 AI 编程助手在排查时主动查看这些日志？默认的 `agentEyes()` 在 Vite 开发服务启动时，会在 Vite 项目根目录中**已存在**的 `AGENTS.md`、`CLAUDE.md` 和 `GEMINI.md` 内更新或追加 `agent-eyes` 标记块，不会新建这些指令文件。要关闭自动同步，可配置 `agentEyes({ agentDocs: false })`。
+
+对于其他助手、没有现成指令文件的项目，或需要手动设置的情况，可以参考 [Agent Bootstrap 指南](https://github.com/webkubor/vite-plugin-agent-eyes/blob/main/AGENT_BOOTSTRAP.md)；安装 npm 包后也可在 `node_modules/vite-plugin-agent-eyes/AGENT_BOOTSTRAP.md` 查看。无论自动或手动设置，效果仍取决于助手实际是否读取对应文件。
 
 ## 下一步
 
