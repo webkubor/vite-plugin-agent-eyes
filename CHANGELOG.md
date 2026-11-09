@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-11-09
+
+### Fixed
+- 自动遥测在真实浏览器中不生效：0.17.0 注入的 `<script type="module">` 使用裸模块名 `vite-plugin-agent-eyes/client`，浏览器无法解析，前端未捕获异常不会自动写入 `errors.log`。现在客户端注入在 Vite 改写 HTML 导入之前执行（`transformIndexHtml` 的 `order: 'pre'`），Vite 4–8 均无残留裸导入；真实浏览器（Vite 8）触发的异常已写入日志。升级后无需改配置。
+
+### Changed
+- `llms.txt` 按问题索引 15 个在线指南页（401 案例、截图快照、交互轨迹、登录态画像等），`SKILL.md` 增加在线指南入口。
+
 ## [0.17.0] - 2026-11-03
 
 ### Added
