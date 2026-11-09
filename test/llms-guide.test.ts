@@ -13,8 +13,10 @@ const llms = fs.readFileSync(path.join(root, 'llms.txt'), 'utf8')
 const skill = fs.readFileSync(path.join(root, 'SKILL.md'), 'utf8')
 
 describe('llms.txt 保留使用入口', () => {
-  it('列出安装方式', () => {
-    expect(llms).toContain('npm install vite-plugin-agent-eyes')
+  it('列出安装方式，且作为开发依赖安装', () => {
+    expect(llms).toContain('pnpm add -D vite-plugin-agent-eyes')
+    expect(llms).toContain('npm install -D vite-plugin-agent-eyes')
+    expect(llms).not.toMatch(/^npm install vite-plugin-agent-eyes\s*$/m)
   })
 
   it('按问题索引在线指南', () => {
