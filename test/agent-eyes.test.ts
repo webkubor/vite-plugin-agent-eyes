@@ -51,7 +51,7 @@ describe('agentEyes', () => {
     }).find((item) => item.name === 'vite-plugin-agent-eyes-client-auto')
 
     const hook = plugin?.transformIndexHtml
-    if (!hook || typeof hook === 'function' || hook.order !== 'pre') {
+    if (!hook || typeof hook === 'function' || hook.order !== 'pre' || !('handler' in hook)) {
       throw new Error('pre-transform client auto plugin not found')
     }
 
@@ -96,7 +96,7 @@ describe('agentEyes', () => {
     const plugin = agentEyes({ sizeWatch: false, git: false }).find((item) => item.name === 'vite-plugin-agent-eyes-client-auto')
 
     const hook = plugin?.transformIndexHtml
-    if (!hook || typeof hook === 'function' || hook.order !== 'pre') {
+    if (!hook || typeof hook === 'function' || hook.order !== 'pre' || !('handler' in hook)) {
       throw new Error('pre-transform client auto plugin not found')
     }
 
