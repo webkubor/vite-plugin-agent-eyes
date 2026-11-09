@@ -48,6 +48,8 @@ head log/5173/errors.log
 
 `log/README.md` 是给 agent 的自描述入口（启动时自动生成），agent 不知道该读哪个文件时，让它先读这个。
 
+想让 AI 编程助手在排查时主动查看这些日志？插件不会自动修改助手的指令文件。可以参考 [Agent Bootstrap 指南](https://github.com/webkubor/vite-plugin-agent-eyes/blob/main/AGENT_BOOTSTRAP.md)，把适用于你所用助手的规则加入项目指令文件；安装 npm 包后，也可以在 `node_modules/vite-plugin-agent-eyes/AGENT_BOOTSTRAP.md` 查看。规则仍取决于助手实际是否读取对应文件。
+
 ## 下一步
 
 - 截图和 DOM 快照怎么开 → [错误截图 + DOM 快照](./snapshots)
