@@ -17,10 +17,10 @@
 ## See it in 30 seconds
 
 <p align="center">
-  <img src="assets/demo/agent-eyes-blog-walkthrough.gif" alt="Live demo on the webkubor blog: projects page, Agent Eyes entry, crawler checks, CDP browser detection, route-scoped screenshot" width="900" />
+  <img src="assets/demo/agent-eyes-v0.17.1-log.png" alt="Agent Eyes 0.17.1 isolated demo: a simulated error written to local errors.log" width="900" />
 </p>
 
-> Recorded on my real [webkubor blog](https://webkubor.online/) running locally with Vite: `/projects`, a 54-URL sitemap, CDP detection, and a screenshot labeled with its project and route. [Stills and recording details](./assets/demo/README.md).
+> The npm release 0.17.1 running in an isolated Vite 8 example: after a simulated browser error, the page reads the plugin's actual local `errors.log`. [Watch the demo](./assets/demo/agent-eyes-v0.17.1-demo.mp4) · [Capture details](./assets/demo/README.md).
 
 | Before | With Agent Eyes |
 |---|---|

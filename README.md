@@ -17,10 +17,10 @@
 ## 30 秒看懂它
 
 <p align="center">
-  <img src="assets/demo/agent-eyes-blog-walkthrough.gif" alt="实录：webkubor 博客作品页 → Agent Eyes 入口 → 爬虫配置 → CDP 浏览器检测 → 路由截图" width="900" />
+  <img src="assets/demo/agent-eyes-v0.17.1-log.png" alt="Agent Eyes 0.17.1 隔离演示：模拟异常写入本地 errors.log" width="900" />
 </p>
 
-> 演示来自我的 [webkubor 博客](https://webkubor.online/) 在本地 Vite dev 运行时的真实画面：`/projects` 路由、54 条 sitemap、浏览器 CDP 检测与项目路由截图。[看静态帧和录制说明](./assets/demo/README.md)。
+> 这是 npm 版 0.17.1 在隔离 Vite 8 示例中的真实画面：触发模拟异常后，页面读取插件写出的本地 `errors.log`。[查看演示视频](./assets/demo/agent-eyes-v0.17.1-demo.mp4) · [素材与采样说明](./assets/demo/README.md)。
 
 | 以前排查要做的事 | 现在打开网页就能看到 |
 |---|---|
