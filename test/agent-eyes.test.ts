@@ -5,7 +5,8 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import type { Plugin } from 'vite'
+import { createServer, type Plugin } from 'vite'
+import { fileURLToPath } from 'node:url'
 import { agentEyes } from '../src/index'
 
 function pluginNames(plugins: Plugin[]): string[] {
@@ -49,12 +50,12 @@ describe('agentEyes', () => {
       git: false,
     }).find((item) => item.name === 'vite-plugin-agent-eyes-client-auto')
 
-    if (!plugin || typeof plugin.transformIndexHtml !== 'function') {
-      throw new Error('client auto plugin not found')
+    const hook = plugin?.transformIndexHtml
+    if (!hook || typeof hook === 'function' || hook.order !== 'pre' || !('handler' in hook)) {
+      throw new Error('pre-transform client auto plugin not found')
     }
 
-    const transform = plugin.transformIndexHtml as (this: unknown, html: string, ctx: unknown) => unknown
-    const tags = transform.call({}, '<html><head></head><body></body></html>', {})
+    const tags = hook.handler.call({} as never, '<html><head></head><body></body></html>', {} as never)
 
     expect(tags).toEqual([
       {
@@ -71,15 +72,35 @@ describe('agentEyes', () => {
     ])
   })
 
+  it('lets Vite rewrite the injected client import for browsers', async () => {
+    const client = fileURLToPath(new URL('../src/client.ts', import.meta.url))
+    const server = await createServer({
+      configFile: false,
+      server: { middlewareMode: true },
+      resolve: { alias: { 'vite-plugin-agent-eyes/client': client } },
+      plugins: agentEyes({
+        telemetry: false, sizeWatch: false, git: false, projectGuide: false,
+        agentDocs: false, version: false, banner: false, visual: false,
+      }),
+    })
+    try {
+      const html = await server.transformIndexHtml('/', '<html><head></head><body></body></html>')
+      expect(html).toContain('html-proxy')
+      expect(html).not.toContain("from 'vite-plugin-agent-eyes/client'")
+    } finally {
+      await server.close()
+    }
+  })
+
   it('does not inject twice when the HTML already has the marker', () => {
     const plugin = agentEyes({ sizeWatch: false, git: false }).find((item) => item.name === 'vite-plugin-agent-eyes-client-auto')
 
-    if (!plugin || typeof plugin.transformIndexHtml !== 'function') {
-      throw new Error('client auto plugin not found')
+    const hook = plugin?.transformIndexHtml
+    if (!hook || typeof hook === 'function' || hook.order !== 'pre' || !('handler' in hook)) {
+      throw new Error('pre-transform client auto plugin not found')
     }
 
-    const transform = plugin.transformIndexHtml as (this: unknown, html: string, ctx: unknown) => unknown
-    const tags = transform.call({}, '<script data-agent-eyes-auto="true"></script>', {})
+    const tags = hook.handler.call({} as never, '<script data-agent-eyes-auto="true"></script>', {} as never)
 
     expect(tags).toEqual([])
   })

@@ -219,21 +219,25 @@ function agentEyesClientPlugin(options: AgentEyesOptions): Plugin {
   return {
     name: 'vite-plugin-agent-eyes-client-auto',
     apply: 'serve',
-    transformIndexHtml(html) {
-      if (html.includes(AGENT_EYES_CLIENT_MARK)) return []
-      return [
-        {
-          tag: 'script',
-          attrs: {
-            type: 'module',
-            [AGENT_EYES_CLIENT_MARK]: 'true',
+    transformIndexHtml: {
+      // Vite must see the injected module before its HTML transform rewrites bare imports.
+      order: 'pre',
+      handler(html) {
+        if (html.includes(AGENT_EYES_CLIENT_MARK)) return []
+        return [
+          {
+            tag: 'script',
+            attrs: {
+              type: 'module',
+              [AGENT_EYES_CLIENT_MARK]: 'true',
+            },
+            children:
+              `import { autoInstrument } from 'vite-plugin-agent-eyes/client'\n` +
+              `autoInstrument(${jsonForInlineScript(clientOptions)})`,
+            injectTo: 'head-prepend',
           },
-          children:
-            `import { autoInstrument } from 'vite-plugin-agent-eyes/client'\n` +
-            `autoInstrument(${jsonForInlineScript(clientOptions)})`,
-          injectTo: 'head-prepend',
-        },
-      ]
+        ]
+      },
     },
   }
 }
