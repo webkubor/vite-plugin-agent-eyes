@@ -31,8 +31,22 @@ describe('visual dev panel', () => {
     expect(inspectBrowserCapability).toHaveBeenCalledWith(`${base}/users`)
     expect(JSON.stringify(data)).not.toContain('secret')
     const html = await fetch(`${base}/__agent-eyes?page=${encodeURIComponent(`${base}/users`)}`).then((r) => r.text())
-    expect(html).toContain('爬虫配置探测')
+    expect(html).toContain('爬虫与 AI 可读性配置')
     expect(html).toContain('截取当前路由')
+    // 2026-11-09 重写：状态先行 —— 首屏给徽章与中文原因，原始 JSON 收进可展开区。
+    expect(html).toContain('浏览器与截图能力')
+    expect(html).toContain('原始状态数据')
+    expect(html).toContain('原始探测数据')
+  })
+  it('explains an unavailable browser in Chinese with a next step', async () => {
+    vi.mocked(inspectBrowserCapability).mockResolvedValueOnce({
+      available: false, matchingPage: false, engine: 'unknown', reason: 'CDP unavailable',
+    })
+    const { base } = await fixture()
+    const html = await fetch(`${base}/__agent-eyes?page=${encodeURIComponent(`${base}/users`)}`).then((r) => r.text())
+    // CDP 的 reason 是英文；面板必须给出中文说明与下一步，而不是把英文原样丢给使用者。
+    expect(html).toContain('浏览器没有开放调试端口')
+    expect(html).toContain('下一步')
   })
   it('rejects off-project capture and cross-origin requests', async () => {
     const { base } = await fixture()
