@@ -20,7 +20,9 @@
   <img src="assets/demo/agent-eyes-v0.17.1-log.png" alt="Agent Eyes 0.17.1 隔离演示：模拟异常写入本地 errors.log" width="900" />
 </p>
 
-> 这是 npm 版 0.17.1 在隔离 Vite 8 示例中的真实画面：触发模拟异常后，页面读取插件写出的本地 `errors.log`。[查看演示视频](./assets/demo/agent-eyes-v0.17.1-demo.mp4) · [素材与采样说明](./assets/demo/README.md)。
+> 这是 npm 版 0.17.1 在隔离 Vite 8 示例中的真实画面：触发模拟异常后，页面读取插件写出的本地 `errors.log`。[素材与采样说明](./assets/demo/README.md)。
+
+https://github.com/user-attachments/assets/e039b812-c366-421f-9f08-afdee5ea428a
 
 | 以前排查要做的事 | 现在打开网页就能看到 |
 |---|---|

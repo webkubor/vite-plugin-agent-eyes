@@ -20,7 +20,9 @@
   <img src="assets/demo/agent-eyes-v0.17.1-log.png" alt="Agent Eyes 0.17.1 isolated demo: a simulated error written to local errors.log" width="900" />
 </p>
 
-> The npm release 0.17.1 running in an isolated Vite 8 example: after a simulated browser error, the page reads the plugin's actual local `errors.log`. [Watch the demo](./assets/demo/agent-eyes-v0.17.1-demo.mp4) · [Capture details](./assets/demo/README.md).
+> The npm release 0.17.1 running in an isolated Vite 8 example: after a simulated browser error, the page reads the plugin's actual local `errors.log`. [Capture details](./assets/demo/README.md).
+
+https://github.com/user-attachments/assets/e039b812-c366-421f-9f08-afdee5ea428a
 
 | Before | With Agent Eyes |
 |---|---|
