@@ -12,6 +12,35 @@
 npm install vite-plugin-agent-eyes
 ```
 
+## 按问题找答案（在线指南）
+站点：https://webkubor.github.io/vite-plugin-agent-eyes/
+
+- 登录成功却一直 401（最常见的坑，附根因与解法）：
+  https://webkubor.github.io/vite-plugin-agent-eyes/guide/case-401
+- 前端报错时怎么拿到截图与 DOM 快照：
+  https://webkubor.github.io/vite-plugin-agent-eyes/guide/snapshots
+- 怎么记录失败的网络请求供调试：
+  https://webkubor.github.io/vite-plugin-agent-eyes/guide/logs
+- 爬虫探测与路由截图：
+  https://webkubor.github.io/vite-plugin-agent-eyes/guide/visual
+- 交互轨迹（点击、表单、导航）：
+  https://webkubor.github.io/vite-plugin-agent-eyes/guide/interactions
+- 登录态画像（agent 判断当前是否已登录）：
+  https://webkubor.github.io/vite-plugin-agent-eyes/guide/auth-profile
+- 提交前风险门禁 Human Guard：
+  https://webkubor.github.io/vite-plugin-agent-eyes/guide/guard
+- 快速上手：https://webkubor.github.io/vite-plugin-agent-eyes/guide/quickstart
+- 安装：https://webkubor.github.io/vite-plugin-agent-eyes/guide/install
+- 为什么不选别的方案：
+  https://webkubor.github.io/vite-plugin-agent-eyes/guide/why
+- 框架无关性（不只 React/Vue）：
+  https://webkubor.github.io/vite-plugin-agent-eyes/guide/framework-agnostic
+- 插件怎么搭配：https://webkubor.github.io/vite-plugin-agent-eyes/guide/combination
+- Git 工作流：https://webkubor.github.io/vite-plugin-agent-eyes/guide/git-workflow
+- 产物体积监控：https://webkubor.github.io/vite-plugin-agent-eyes/guide/size-watch
+- 已知局限与 Roadmap：
+  https://webkubor.github.io/vite-plugin-agent-eyes/guide/roadmap
+
 ## 仓库导览（改代码去哪）
 - `src/` — 插件源码（日志 / 修复 / guard 各模块）
 - `AGENT_GUIDE.md` — agent 使用指南（**日志字段契约**，改结构前必读）

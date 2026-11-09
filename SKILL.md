@@ -10,6 +10,9 @@ version: 0.16.0
 配套 npm 包 `vite-plugin-agent-eyes`（源码在本目录 `src/`，可 `npm publish` 或 git 安装）。
 如果只需要 agent 操作流程，优先读 `AGENT_GUIDE.md`；如果要让 Codex、Claude、Gemini、Hermes 主动发现并使用，读 `AGENT_BOOTSTRAP.md`；README 面向人类安装和评估。
 
+**在线指南**（按问题查，含 401 案例、截图快照、交互轨迹、登录态画像等）：
+https://webkubor.github.io/vite-plugin-agent-eyes/
+
 ## 何时用
 
 - 用户报"页面坏了 / 登录不上 / 请求失败 / cookie 问题"，但你**不该靠猜代码**——先读遥测。
