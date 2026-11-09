@@ -9,8 +9,10 @@
 
 ## 安装
 ```bash
-npm install vite-plugin-agent-eyes
+pnpm add -D vite-plugin-agent-eyes   # 或 npm install -D vite-plugin-agent-eyes
 ```
+
+它是 Vite 配置里的插件，只在构建与开发工具链中加载，作为开发依赖安装即可。
 
 ## 按问题找答案（在线指南）
 站点：https://webkubor.github.io/vite-plugin-agent-eyes/
