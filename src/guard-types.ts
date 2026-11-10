@@ -39,6 +39,16 @@ export interface GuardCssVarsOptions {
   ignorePrefixes?: string[]
 }
 
+/** 新增颜色字面量检查配置；默认仅警告。 */
+export interface GuardDesignTokensOptions {
+  /** 单项严重度；全局 warn 仍会降级。 */
+  level?: GuardSeverity
+  /** 替换默认 token 文件豁免列表，支持 *、**、? glob。 */
+  tokenFiles?: string[]
+  /** 精确匹配允许的颜色字面量（忽略大小写及首尾空格）。 */
+  allowValues?: string[]
+}
+
 /** 环境变量一致性检查配置。 */
 export interface GuardEnvParityOptions {
   /**
@@ -57,6 +67,8 @@ export interface GuardEnvParityOptions {
 
 /** 内置检查项配置。 */
 export interface AgentGuardChecks {
+  /** 检测新增颜色字面量，默认 warn。 */
+  designTokens?: GuardCheckSwitch | GuardDesignTokensOptions
   /** 检测疑似 token、secret、private key、webhook。 */
   secrets?: GuardCheckSwitch
   /** 检测 staged 文件字节数。 */
@@ -137,6 +149,7 @@ export interface NormalizedGuardConfig {
   allowSecrets: string[]
   /** 标准化后的内置检查项。 */
   checks: {
+    designTokens: NormalizedGuardCheck & { tokenFiles: string[]; allowValues: string[] }
     secrets: NormalizedGuardCheck
     largeFiles: NormalizedLargeFilesCheck
     fileLength: NormalizedFileLengthCheck

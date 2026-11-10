@@ -81,3 +81,9 @@ Leave the detailed debugging to [AGENT_GUIDE.md](./AGENT_GUIDE.md) and the gener
 </a>
 
 MIT · [Issues](https://github.com/webkubor/vite-plugin-agent-eyes/issues)
+
+## Design token guard (0.18.0+)
+
+`designTokens` warns by default when staged additions contain hardcoded hex colors, numeric CSS color functions, or Tailwind arbitrary colors. Enable blocking with `agentGit({ guard: { checks: { designTokens: 'block' } } })`; global `level: 'warn'` still downgrades it.
+
+For exceptions use `designTokens: { level: 'warn', tokenFiles: ['**/tokens.*', '**/*tokens*.css', '**/theme.*', '**/design-tokens/**', '**/styles/variables.*'], allowValues: ['#000'] }`. `tokenFiles` replaces the defaults and supports `*`, `**`, and `?`; allowed values match case-insensitively after trimming. Token declarations, comments, tests, fixtures, and SVG assets are exempt. This is a lightweight added-line check, not a CSS/JS parser: multiline functions, computed expressions, and named colors are outside its scope. Restart dev after upgrading to regenerate the hook. See the [API guide](https://webkubor.github.io/vite-plugin-agent-eyes/api/agent-guard).
