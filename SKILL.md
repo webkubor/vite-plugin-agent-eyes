@@ -1,7 +1,7 @@
 ---
 name: agent-eyes
 description: "vite-plugin-agent-eyes 的 agent 使用手册。两块能力：① 自愈遥测——读结构化运行时日志（API/错误/控制台/交互/代理 header）+ 脱敏登录态 + 截图 + DOM 快照，不靠猜代码就诊断修复；② 提交治理——agentGit（去 husky，统一 pre-commit/post-commit + 飞书通知）、agentGuard（提交期硬拦 secret/超长文件/屎山）、agentSizeWatch（dev 期实时警告超长文件）。在 Vite/Astro 项目里配置 agentGit/agentGuard/agentSizeWatch 或排查 guard 拦截/误报时必读。"
-version: 0.17.1
+version: 0.18.0
 ---
 
 # Vite Agent Debugger
@@ -85,7 +85,7 @@ agentGit({
 ```
 
 **level**：`warn` 只报告 / `block`（推荐）红线阻断 / `strict` 暂等同 block。
-**guard.checks**：`['secrets','largeFiles','fileLength','todo','noAny','noConsoleLog','cssVars','envParity']`，可按需开关；`cssVars`/`envParity` 默认 block（静默失效与 env 分叉都验不出来，按红线处理）。
+**guard.checks**：`['secrets','largeFiles','fileLength','todo','noAny','noConsoleLog','cssVars','envParity','designTokens']`，可按需开关；`cssVars`/`envParity` 默认 block（静默失效与 env 分叉都验不出来，按红线处理）。
 
 **两条 0.12.0 行为，配 guard 前必须知道（否则会以为是 bug）：**
 - **lockfile/压缩产物不计 `fileLength`**：`pnpm-lock.yaml`/`package-lock.json`/`yarn.lock`/`*.lock`/`go.sum`/`.min.js|css` 自动跳过——生成物非手写代码。要再扩名单改 `GENERATED_FILE_PATTERN`（guard-core + guard-hook 两份拷贝同步）。
@@ -134,3 +134,25 @@ log/<port>/proxy-<host>.log: GET .../auth/session → 200 | Cookie(req): 无   �
 | `log/<port>/snapshots/dom-*.html` | DOM 快照（始终可用，无需 CDP） |
 | `log/project-guide.json` | 项目类型、API/业务/路由/配置层级、alias 与规划建议 |
 | `log/guard-report.json` | 最近一次提交前 guard JSON 报告 |
+
+### 设计 token 提交检查（0.18.0+）
+
+`designTokens` 默认启用、严重度为 `warn`，只检查 staged 新增行。检测 `.css/.scss/.less/.vue/.tsx/.jsx/.ts/.js/.astro/.svelte` 中的 3/4/6/8 位 hex、`rgb/rgba/hsl/hsla/oklch/oklab/lab/lch/color()` 数值字面量及 Tailwind `bg-[#fff]` 等任意值。提示：「硬编码颜色，应使用项目 tokens（见 DESIGN.md）」。
+
+```ts
+agentGit({
+  guard: {
+    checks: {
+      designTokens: {
+        level: 'block', // 默认 warn；guard.level: 'warn' 仍会降级
+        tokenFiles: ['**/tokens.*', '**/*tokens*.css', '**/theme.*', '**/design-tokens/**', '**/styles/variables.*'],
+        allowValues: ['#000', 'rgb(0 0 0)'],
+      },
+    },
+  },
+})
+```
+
+也可写 `designTokens: false` 关闭、`designTokens: 'block'` 阻断，或在 `checks: ['designTokens']` 中单独启用。`tokenFiles` 替换默认列表，路径相对仓库根，支持 `*`、`**`、`?`（`**/` 可匹配根目录）。`allowValues` 精确匹配单个颜色字面量，忽略大小写和首尾空格。
+
+默认豁免上述 token 文件、自定义属性声明、行注释/块注释/HTML 注释、测试与 fixture 目录及 `.test/.spec/.fixture` 文件；SVG 资源不参与扫描。`transparent`、`currentColor`、`inherit` 和纯 `var()` 引用不报告。同一行普通声明仍会检查，每行最多报告一次。此检查是轻量文本检查，不解析完整 CSS/JS AST；跨行颜色函数、计算表达式与命名颜色不在当前检测范围。升级或改配置后重新启动 dev，以重写 Git hook。

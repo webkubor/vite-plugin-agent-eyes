@@ -4,6 +4,7 @@
  * API：无；负责配置标准化、staged 文件采集、文本检查、报告写入与渲染。
  */
 
+import { runDesignTokenChecks } from './guard-design-tokens'
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -107,12 +108,19 @@ export function normalizeGuardConfig(options: AgentGuardOptions = {}): Normalize
   const fileLength = fileLengthOptions(checks)
   const cssVars = cssVarsOptions(checks)
   const envParity = envParityOptions(checks)
+  const designTokens = checks && !Array.isArray(checks) && typeof checks.designTokens === 'object' ? checks.designTokens : {}
 
   return {
     level,
     reportFile: options.reportFile ?? DEFAULT_REPORT_FILE,
     allowSecrets: options.allowSecrets ?? [],
     checks: {
+      designTokens: {
+        ...normalizedSwitch(level, checks, 'designTokens', 'warn'),
+        severity: severityFor(level, designTokens.level ?? switchValue(checks, 'designTokens'), 'warn'),
+        tokenFiles: designTokens.tokenFiles ?? ['**/tokens.*', '**/*tokens*.css', '**/theme.*', '**/design-tokens/**', '**/styles/variables.*'],
+        allowValues: designTokens.allowValues ?? [],
+      },
       secrets: normalizedSwitch(level, checks, 'secrets', 'block'),
       largeFiles: {
         enabled: enabledFor(checks, 'largeFiles'),
@@ -602,5 +610,5 @@ export function runTextChecks(file: StagedFile, config: NormalizedGuardConfig): 
     }
   }
 
-  return items
+  return [...items, ...runDesignTokenChecks(file, config.checks.designTokens)]
 }

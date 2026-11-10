@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-10
+
+### Added
+- agentGuard 新增 `designTokens`：提交时只检查样式、组件和脚本新增行里的硬编码颜色（hex、CSS 颜色函数与 Tailwind 任意值），默认 warn，可单项设为 block。支持 token 文件 glob、颜色 allowValues，并豁免自定义属性声明、注释、测试/fixture 和 SVG 资源。API 与独立 Git hook 共用检测逻辑，提示项目按 DESIGN.md 使用 tokens。
+
 ## [0.17.1] - 2026-11-09
 
 ### Fixed

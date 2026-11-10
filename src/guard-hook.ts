@@ -4,6 +4,8 @@
  * API：无；生成无 dev server 依赖的自包含 Node ESM Git hook。
  */
 
+import { normalizeGuardConfig } from './guard-core'
+import { runDesignTokenChecks } from './guard-design-tokens'
 import type { AgentGuardOptions } from './guard-types'
 
 const HOOK_RUNTIME_SOURCE = String.raw`
@@ -66,6 +68,7 @@ function normalizeGuardConfig(options = {}) {
     reportFile: options.reportFile ?? DEFAULT_REPORT_FILE,
     allowSecrets: options.allowSecrets ?? [],
     checks: {
+      designTokens: DESIGN_TOKENS_CONFIG,
       secrets: normalizedSwitch(level, checks, 'secrets', 'block'),
       largeFiles: { enabled: enabledFor(checks, 'largeFiles'), severity: severityFor(level, switchValue(checks, 'largeFiles'), 'block'), blockBytes: largeFiles.blockBytes ?? DEFAULT_LARGE_FILE_BLOCK_BYTES },
       fileLength: { enabled: enabledFor(checks, 'fileLength'), severity: severityFor(level, switchValue(checks, 'fileLength'), 'warn'), warn: fileLength.warn ?? DEFAULT_FILE_LENGTH_WARN, block: fileLength.block ?? DEFAULT_FILE_LENGTH_BLOCK },
@@ -182,7 +185,7 @@ function runTextChecks(file, config) {
   if (config.checks.noConsoleLog.enabled && isConsoleLogFile(file.path)) for (const added of file.addedLines) {
     if (!secretLines.has(added.line) && /\bconsole\.log\s*\(/.test(added.text)) items.push(addedLineItem('noConsoleLog', config.checks.noConsoleLog.severity, file, added, '新增 console.log'));
   }
-  return items;
+  return [...items, ...runDesignTokenChecks(file, config.checks.designTokens)];
 }
 
 function summarizeItems(items) {
@@ -252,6 +255,8 @@ export function createGuardHookScript(options: AgentGuardOptions = {}): string {
   const optionsJson = JSON.stringify(options)
   return [
     '#!/usr/bin/env node',
+    `const DESIGN_TOKENS_CONFIG = ${JSON.stringify(normalizeGuardConfig(options).checks.designTokens)};`,
+    `const runDesignTokenChecks = ${runDesignTokenChecks.toString()};`,
     HOOK_RUNTIME_SOURCE.trim(),
     `const result = runGuard(${optionsJson}, process.cwd());`,
     'console.log(renderGuardReport(result));',
