@@ -151,7 +151,7 @@ Tailwind 的 arbitrary value（`z-[var(--z-overlay)]`、`rounded-[var(--radius-m
 
 > `cssVars` 拦的是「变量**不存在**」。变量存在之后还有两层能坏——值不合格（对比度不够）
 > 和用得失控（一屏 9 种字号、灰阶只拉开 2 层），由
-> [contrast-guard](https://github.com/webkubor/contrast-guard) 接着守。
+> [ui-craft](https://github.com/webkubor/ui-craft) 接着守。
 > 三种都不报错、都能过构建，只是坏的方式不同。
 
 ## 配了之后会发生什么
