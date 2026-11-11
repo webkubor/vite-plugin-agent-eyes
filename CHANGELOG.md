@@ -71,7 +71,7 @@
 ### Changed
 - README 精简 69%（498→188 行），职责改为「让人 30 秒决定要不要用」而非充当 API 手册：单 API 参考一节原本就有 101 行，而 `website/api/` 已有 9 个文件覆盖全部导出。保留「为什么 / 招牌案例 401 / cssVars 为什么是 block / 日志表 / 质量链路」，全部 API 表格、配置项表格、重复代码示例与 Vite 版本矩阵外移并加了链接（外移内容已逐条确认在文档站有对应页）。**注意 `README.md` 随包发布**，装 0.15.0 的用户拿到的是精简版。
 - 补齐 `cssVars` 的文档缺口：0.14.0 新增的这项检查文档站从未同步（`website/guide/guard.md` 的 checks 数组、`website/api/agent-guard.md` 的检查项表都缺它，`declareFrom` / `ignorePrefixes` 全站无记载），README 精简后这些信息会真的丢失。
-- 与 `contrast-guard` 互链，补一张表说明前端质量链路的递进分工：`cssVars` guard 拦「变量不存在」，变量存在之后还有两层能坏——值不合格（对比度）、用得失控（一屏 9 种字号）。三种都不报错、都能过构建，只是坏的方式不同。另在「DOM 快照不含 computed styles」这条 Roadmap 局限上标注当前替代方案。
+- 与 `ui-craft` 互链，补一张表说明前端质量链路的递进分工：`cssVars` guard 拦「变量不存在」，变量存在之后还有两层能坏——值不合格（对比度）、用得失控（一屏 9 种字号）。三种都不报错、都能过构建，只是坏的方式不同。另在「DOM 快照不含 computed styles」这条 Roadmap 局限上标注当前替代方案。
 
 ## [0.14.0] - 2026-08-13
 
