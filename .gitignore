@@ -1,3 +1,6 @@
+# macOS Finder 的目录元数据（本机产物）
+.DS_Store
+
 # 带斜杠只匹配目录；在 worktree 里把 node_modules 软链到主检出时是 symlink，
 # 会漏网被 git add 收进提交，故同时忽略无斜杠形式。
 node_modules/
