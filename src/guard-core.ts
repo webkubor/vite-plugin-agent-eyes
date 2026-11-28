@@ -21,6 +21,7 @@ import {
   DEFAULT_REPORT_FILE,
   ENV_FILE_PATTERN,
   GENERATED_FILE_PATTERN,
+  HISTORY_DOCUMENT_PATTERN,
   JS_VAR_DECL_PATTERN,
   SECRET_PATTERNS,
   type AddedLine,
@@ -560,7 +561,7 @@ export function runTextChecks(file: StagedFile, config: NormalizedGuardConfig): 
   }
 
   const lines = lineCount(file.content)
-  const skipLength = GENERATED_FILE_PATTERN.test(file.path)
+  const skipLength = GENERATED_FILE_PATTERN.test(file.path) || HISTORY_DOCUMENT_PATTERN.test(file.path)
   if (config.checks.fileLength.enabled && !skipLength && lines >= config.checks.fileLength.block) {
     items.push({
       check: 'fileLength',

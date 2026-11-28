@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -26,6 +26,52 @@ describe('generated guard hook script', () => {
       fs.rmSync(dir, { recursive: true, force: true })
     }
     createdRepos = []
+  })
+
+  const longContent = Array.from({ length: 801 }, () => 'release entry').join('\n')
+  const secret = 'const token = "sk_live_1234567890abcdef"'
+  const cases = [
+    { file: 'CHANGELOG.md', content: longContent, checks: [], blocks: 0 },
+    { file: 'HISTORY.md', content: longContent, checks: [], blocks: 0 },
+    { file: 'public/CHANGELOG.md', content: longContent, checks: [], blocks: 0 },
+    { file: 'public/HISTORY.md', content: longContent, checks: [], blocks: 0 },
+    { file: 'public/changelog.md', content: longContent, checks: [], blocks: 0 },
+    { file: 'public/CHANGELOG.md', content: `${secret}\n${longContent}`, checks: ['secrets'], blocks: 1 },
+    { file: 'HISTORY.md', content: `${secret}\n${longContent}`, checks: ['secrets'], blocks: 1 },
+    { file: 'public/CHANGELOG.md', content: 'x'.repeat(1025), checks: ['largeFiles'], blocks: 1 },
+    { file: 'src/example.ts', content: longContent, checks: ['fileLength'], blocks: 1 },
+    { file: 'src/CHANGELOG.ts', content: longContent, checks: ['fileLength'], blocks: 1 },
+    { file: 'src/CHANGELOG.md.ts', content: longContent, checks: ['fileLength'], blocks: 1 },
+    { file: 'public/MY_CHANGELOG.md', content: longContent, checks: ['fileLength'], blocks: 1 },
+    { file: 'public/CHANGELOG.old.md', content: longContent, checks: ['fileLength'], blocks: 1 },
+    { file: 'public/README.md', content: longContent, checks: ['fileLength'], blocks: 1 },
+    { file: 'src/safe.ts', content: 'const value = 1\n', checks: [], blocks: 0 },
+    { file: 'src/secret.ts', content: secret, checks: ['secrets'], blocks: 1 },
+    { file: 'src/warning.ts', content: 'const value: any = {}', checks: ['noAny'], blocks: 0 },
+    { file: 'src/warn-length.ts', content: Array(401).fill('// entry').join('\n'), checks: ['fileLength'], blocks: 0 },
+  ]
+
+  it.each(cases)('keeps core and hook checks for $file ($checks)', ({ file, content, checks, blocks }) => {
+    const dir = makeRepo()
+    fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true })
+    fs.writeFileSync(path.join(dir, file), content)
+    git(dir, ['add', '--', file])
+
+    // Keep all default checks enabled so an archive exemption cannot hide secrets or large files.
+    const options = checks.includes('largeFiles') ? { checks: { largeFiles: { blockBytes: 1024 } } } : {}
+    const core = runGuard(options, dir)
+    const scriptFile = path.join(dir, '.git', 'hooks', 'agent-eyes-guard.mjs')
+    fs.mkdirSync(path.dirname(scriptFile), { recursive: true })
+    fs.writeFileSync(scriptFile, createGuardHookScript(options))
+    const hook = spawnSync(process.execPath, [scriptFile], { cwd: dir, encoding: 'utf8' })
+    const report = JSON.parse(fs.readFileSync(path.join(dir, 'log', 'guard-report.json'), 'utf8')) as typeof core
+
+    expect(core.items.map((item) => item.check)).toEqual(checks)
+    expect(core.summary.block).toBe(blocks)
+    expect(hook.status).toBe(blocks ? 1 : 0)
+    expect(report.items).toEqual(core.items)
+    expect(report.summary).toEqual(core.summary)
+    expect(report.passed).toBe(core.passed)
   })
 
   it('blocks staged secrets in block mode', () => {

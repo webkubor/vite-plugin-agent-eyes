@@ -18,6 +18,7 @@ const DEFAULT_LARGE_FILE_BLOCK_BYTES = 1024 * 1024;
 const DEFAULT_FILE_LENGTH_WARN = 400;
 const DEFAULT_FILE_LENGTH_BLOCK = 800;
 const GENERATED_FILE_PATTERN = /(?:^|\/)(?:pnpm-lock\.yaml|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|bun\.lockb?|composer\.lock|Cargo\.lock|poetry\.lock|Gemfile\.lock|Podfile\.lock|go\.sum)$|\.min\.(?:js|css)$/;
+const HISTORY_DOCUMENT_PATTERN = /(?:^|\/)(?:CHANGELOG|HISTORY)\.md$/i;
 const SECRET_PATTERNS = [
   /-----BEGIN (?:RSA |EC |OPENSSH |)?PRIVATE KEY-----/,
   /\b(?:token|secret|api[_-]?key|access[_-]?token|refresh[_-]?token)\b\s*[:=]\s*['"][^'"]{12,}['"]/i,
@@ -166,7 +167,7 @@ function runTextChecks(file, config) {
     items.push({ check: 'largeFiles', severity: config.checks.largeFiles.severity, file: file.path, message: String(file.bytes) + ' bytes exceeds ' + String(config.checks.largeFiles.blockBytes) + ' bytes' });
   }
   const lines = lineCount(file.content);
-  const skipLength = GENERATED_FILE_PATTERN.test(file.path);
+  const skipLength = GENERATED_FILE_PATTERN.test(file.path) || HISTORY_DOCUMENT_PATTERN.test(file.path);
   if (config.checks.fileLength.enabled && !skipLength && lines >= config.checks.fileLength.block) {
     items.push({ check: 'fileLength', severity: config.level === 'warn' ? 'warn' : 'block', file: file.path, message: String(lines) + ' lines exceeds block threshold ' + String(config.checks.fileLength.block) });
   } else if (config.checks.fileLength.enabled && !skipLength && lines >= config.checks.fileLength.warn) {

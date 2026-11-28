@@ -226,6 +226,9 @@ export const DEFAULT_FILE_LENGTH_BLOCK = 800
 /** dev 期 size watch：CSS/SCSS 默认警告阈值（更严，AI 写 CSS 易堆超长文件）。 */
 export const DEFAULT_CSS_LENGTH_WARN = 300
 
+/** 持续追加的历史文档仅跳过 fileLength；其它检查照常执行。 */
+export const HISTORY_DOCUMENT_PATTERN = /(?:^|\/)(?:CHANGELOG|HISTORY)\.md$/i
+
 /** 生成物文件：lockfile 与压缩产物不计入 fileLength（非手写代码，行数无意义）。 */
 export const GENERATED_FILE_PATTERN =
   /(?:^|\/)(?:pnpm-lock\.yaml|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|bun\.lockb?|composer\.lock|Cargo\.lock|poetry\.lock|Gemfile\.lock|Podfile\.lock|go\.sum)$|\.min\.(?:js|css)$/

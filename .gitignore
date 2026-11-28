@@ -18,3 +18,6 @@ package-lock.json
 
 # agent 工作树（agent 本地运行时产物，不入库）
 .claude/
+
+# 运行时临时文件（0 字节残留，不属于产物）
+_tmp_*
